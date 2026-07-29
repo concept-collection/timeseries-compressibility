@@ -3,7 +3,7 @@
  * stutters while zstd -19 or the LPC fit runs. One message in (the model),
  * one message out (the nine codec results).
  */
-import { Pipeline } from '../model/pipeline'
+import { LatentSource } from '../model/latent'
 import {
   initCodecs,
   compressAll,
@@ -44,7 +44,7 @@ self.onmessage = async (e: MessageEvent<CompressRequest>) => {
   const { id, kernel, sigma, dither, blockSize, seed } = e.data
   try {
     await initCodecs()
-    const samples = new Pipeline(kernel, sigma, dither, seed).next(blockSize)
+    const samples = new LatentSource(seed).window(0, blockSize, kernel, sigma, dither)
     let sum = 0
     let sumSq = 0
     for (let i = 0; i < samples.length; i++) {

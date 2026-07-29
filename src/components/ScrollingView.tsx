@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Pipeline } from '../model/pipeline'
+import { LatentSource, LATENT_SEED } from '../model/latent'
 
-/** Display samples generated per second; px per sample is fixed below. */
+/** Display samples generated per second while playing; px per sample fixed. */
 const RATE = 220
 const PX_PER_SAMPLE = 2
-const RING_SIZE = 8192
 
 /** A nice round gridline step ≤ span/2. */
 function niceStep(span: number): number {
@@ -15,10 +14,11 @@ function niceStep(span: number): number {
 }
 
 /**
- * The generated quantized signal z, drawn sample-and-hold so the integer
- * staircase is visible once σ is small. Rendering is a canvas ring buffer fed
- * by the same Pipeline the compression worker uses. Stationary by default — a
- * fresh window per parameter change — with a play toggle to let it stream.
+ * A window of the quantized signal z, drawn as connected line segments.
+ * The underlying randomness is a fixed latent sequence indexed by absolute
+ * sample position — parameter changes re-render the same window of latent
+ * data (no resampling), so the trace morphs smoothly. Stationary by default;
+ * the play toggle advances the window through the latent sequence.
  */
 export default function ScrollingView(props: {
   kernel: Float64Array
@@ -28,31 +28,20 @@ export default function ScrollingView(props: {
   sigmaY: number
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const seedRef = useRef(1)
   const [playing, setPlaying] = useState(false)
   const playingRef = useRef(playing)
   playingRef.current = playing
+  // Latent noise and window position survive parameter changes.
+  const latentRef = useRef<LatentSource | null>(null)
+  if (!latentRef.current) latentRef.current = new LatentSource(LATENT_SEED)
+  const posRef = useRef(0)
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-
-    const pipeline = new Pipeline(props.kernel, props.sigma, props.dither, seedRef.current++)
-    const ring = new Float32Array(RING_SIZE)
-    let head = 0
-    let filled = 0
-    const push = (samples: Int16Array) => {
-      for (let i = 0; i < samples.length; i++) {
-        ring[head] = samples[i]
-        head = (head + 1) % RING_SIZE
-      }
-      filled = Math.min(RING_SIZE, filled + samples.length)
-    }
-
-    // Start with a full screen of history so the view is never empty.
-    push(pipeline.next(2048))
+    const latent = latentRef.current!
 
     const scale = Math.max(4 * props.sigmaY, 3.5)
     const gridStep = niceStep(scale)
@@ -76,7 +65,7 @@ export default function ScrollingView(props: {
         carry += dt * RATE
         const n = Math.floor(carry)
         carry -= n
-        if (n > 0) push(pipeline.next(n))
+        posRef.current += n
       } else {
         carry = 0
       }
@@ -91,32 +80,39 @@ export default function ScrollingView(props: {
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
+      const visible = Math.floor(w / PX_PER_SAMPLE)
+      // The window ends at posRef and never reaches before index 0, so the
+      // first thing shown is the start of the compression block.
+      if (posRef.current < visible) posRef.current = visible
+      const win = latent.window(posRef.current - visible, visible, props.kernel, props.sigma, props.dither)
+
       const surface = styles.getPropertyValue('--surface')
       ctx.fillStyle = surface
       ctx.fillRect(0, 0, w, h)
 
       const yOf = (v: number) => h / 2 - (v / scale) * (h / 2 - 12)
 
-      ctx.strokeStyle = styles.getPropertyValue('--grid')
       ctx.lineWidth = 1
-      ctx.fillStyle = styles.getPropertyValue('--muted')
       ctx.font = '11px system-ui, sans-serif'
       ctx.textAlign = 'left'
       for (let g = -2; g <= 2; g++) {
         const v = g * gridStep
         if (Math.abs(v) > scale) continue
         const y = Math.round(yOf(v)) + 0.5
-        ctx.beginPath()
-        ctx.moveTo(0, y)
-        ctx.lineTo(w, y)
-        if (g !== 0) ctx.stroke()
+        if (g !== 0) {
+          ctx.strokeStyle = styles.getPropertyValue('--grid')
+          ctx.beginPath()
+          ctx.moveTo(0, y)
+          ctx.lineTo(w, y)
+          ctx.stroke()
+        }
         // A surface-colored halo keeps the label readable over the trace.
+        const label = `${v > 0 ? '+' : ''}${+v.toPrecision(3)}`
+        ctx.fillStyle = styles.getPropertyValue('--muted')
         ctx.strokeStyle = surface
         ctx.lineWidth = 3
-        const label = `${v > 0 ? '+' : ''}${+v.toPrecision(3)}`
         ctx.strokeText(label, 6, y - 4)
         ctx.fillText(label, 6, y - 4)
-        ctx.strokeStyle = styles.getPropertyValue('--grid')
         ctx.lineWidth = 1
       }
       const zeroY = Math.round(yOf(0)) + 0.5
@@ -126,19 +122,15 @@ export default function ScrollingView(props: {
       ctx.lineTo(w, zeroY)
       ctx.stroke()
 
-      const visible = Math.min(filled, Math.floor(w / PX_PER_SAMPLE))
       ctx.strokeStyle = styles.getPropertyValue('--series-1')
       ctx.lineWidth = 2
       ctx.lineJoin = 'round'
       ctx.beginPath()
       for (let i = 0; i < visible; i++) {
-        const idx = (head - visible + i + RING_SIZE) % RING_SIZE
-        const x = w - (visible - i) * PX_PER_SAMPLE
-        const y = yOf(ring[idx])
-        // Sample-and-hold: horizontal run at each value, vertical jump between.
+        const x = w - (visible - i) * PX_PER_SAMPLE + PX_PER_SAMPLE / 2
+        const y = yOf(win[i])
         if (i === 0) ctx.moveTo(x, y)
         else ctx.lineTo(x, y)
-        ctx.lineTo(x + PX_PER_SAMPLE, y)
       }
       ctx.stroke()
     }

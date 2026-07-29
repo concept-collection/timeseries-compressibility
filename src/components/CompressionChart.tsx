@@ -41,7 +41,7 @@ export default function CompressionChart(props: {
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const width = useWidth(ref, 720)
-  const [metric, setMetric] = useState<Metric>('bits')
+  const [metric, setMetric] = useState<Metric>('ratio')
   const [tip, setTip] = useState<Tip | null>(null)
   const [hovered, setHovered] = useState<number | null>(null)
 
@@ -80,11 +80,11 @@ export default function CompressionChart(props: {
       <div className="chart-header">
         <div>
           <div className="segmented" role="group" aria-label="metric">
-            <button className={metric === 'bits' ? 'active' : ''} onClick={() => setMetric('bits')}>
-              bits / sample
-            </button>
             <button className={metric === 'ratio' ? 'active' : ''} onClick={() => setMetric('ratio')}>
               compression ratio
+            </button>
+            <button className={metric === 'bits' ? 'active' : ''} onClick={() => setMetric('bits')}>
+              bits / sample
             </button>
           </div>
           <span className="metric-hint">

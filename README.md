@@ -12,19 +12,23 @@ block under nine methods — zlib, zstd, and an rANS entropy coder, each raw,
 delta-coded, and LPC-residual-coded — as bits per sample and as ratio against
 raw int16 storage.
 
-Alongside the measurements it plots the theoretical bits/sample: the entropy
-rate of the stationary filtered Gaussian process quantized at unit step, in the
-high-resolution limit,
+Alongside the measurements it plots a theoretical bits/sample R: quantization
+is modeled as an additive white noise floor on the spectrum, the one-step
+Wiener prediction error of the resulting process comes from the
+Szegő–Kolmogorov formula, and R is the exact entropy of that innovation
+quantized at unit step:
 
 ```
-R = ½ log₂(2πe) + ∫₀^½ log₂ S(f) df,    S(f) = σ² |H(f)|²
+S_z(f) = σ²|H(f)|² + σ_q²         σ_q² = 1/12 (1/6 with dither)
+σ_e²   = exp( 2 ∫₀^½ ln S_z(f) df )
+R      = H_Δ(σ_e)                 (exact quantized-Gaussian entropy)
 ```
 
-LPC + ANS should approach R — and does, where the formula is valid. Where the
-filter's stopband pushes S(f) below one step² (see the dashed threshold on the
-response plot), the formula under-predicts and can go negative; making that
-breakdown visible is part of the point. The math section is a stub for the full
-derivation.
+Where the spectrum sits well above one step² this reduces to the classical
+Gaussian entropy rate ½log₂(2πe) + ∫log₂S df; the noise floor keeps it finite
+and positive where a deep stopband would send that integral to −∞. LPC + ANS
+should approach R; probing where the approximation holds is the point. The
+math section is a stub for the full derivation.
 
 ## Run it
 
@@ -36,16 +40,18 @@ npm run dev
 ## Layout
 
 ```
-src/model/       the pipeline (seeded Gaussian stream, FIR presets, dither,
-                 rounding) and the entropy-rate integral
+src/model/       the latent source (fixed seeded randomness indexed by sample
+                 position, convolved zero-phase with the kernel on demand),
+                 FIR presets, and the theoretical-rate formula
 src/compress/    lossless codecs run in the browser: zlib (fflate), zstd (wasm),
                  ans.ts (a bit-identical port of simple_ans), and FLAC-style
                  integer LPC; borrowed from entropy-quantized-linear-transform
 src/worker/      the codecs run off the main thread on a debounced parameter set
-src/components/  controls, filter plots, scrolling canvas, compression chart
+src/components/  controls, filter plots, signal canvas, compression chart
 ```
 
 Every reported size round-trips through the decoder and includes whatever the
-decoder needs (ANS symbol table, LPC coefficients). The compression block and
-the scrolling display are fed by the same `Pipeline`, so what is compressed is
-what is shown.
+decoder needs (ANS symbol table, LPC coefficients). The signal view and the
+compression block read the same fixed latent noise sequence — parameter changes
+transform the same underlying data rather than resampling it, and the first
+window shown is the start of the block that gets compressed.

@@ -5,7 +5,7 @@ import ScrollingView from './components/ScrollingView'
 import CompressionChart from './components/CompressionChart'
 import MathSection from './components/MathSection'
 import { DEFAULT_SPEC, designKernel, kernelNorm } from './model/filters'
-import { entropyRateBits } from './model/theory'
+import { theoreticalRateBits } from './model/theory'
 import type { CodecResult } from './compress/codecs'
 import type { CompressRequest, CompressResponse } from './worker/compressWorker'
 
@@ -81,7 +81,7 @@ export default function App() {
     const filtered = sigma * kernelNorm(kernel)
     return dither ? Math.sqrt(filtered * filtered + 1 / 12) : filtered
   }, [kernel, sigma, dither])
-  const theoryBits = useMemo(() => entropyRateBits(kernel, sigma), [kernel, sigma])
+  const theoryBits = useMemo(() => theoreticalRateBits(kernel, sigma, dither), [kernel, sigma, dither])
   const compression = useCompression(kernel, sigma, dither)
 
   return (
@@ -118,9 +118,9 @@ export default function App() {
         <h2>Quantized signal z</h2>
         <ScrollingView kernel={kernel} sigma={sigma} dither={dither} sigmaY={sigmaY} />
         <p className="card-note">
-          A window of samples from the model, redrawn when parameters change; press play to watch
-          it stream. Sample-and-hold rendering, so the integer staircase appears as σ approaches
-          the quantization step.
+          A window of samples from the model, drawn from a fixed latent noise sequence — changing
+          σ, the filter, or dither transforms the same underlying data, so the trace morphs
+          rather than resampling. Press play to advance through the sequence.
         </p>
       </section>
 
@@ -141,7 +141,7 @@ export default function App() {
             </span>
           </div>
           <div className="stat">
-            <span className="label">entropy rate R (theory)</span>
+            <span className="label">theoretical rate R</span>
             <span className="value">
               {theoryBits.toFixed(2)} <small>bits/sample</small>
             </span>
@@ -161,11 +161,11 @@ export default function App() {
           />
         )}
         <p className="card-note">
-          Measured on a {BLOCK_SIZE.toLocaleString()}-sample block from the same model; sizes
-          include everything a decoder needs (ANS symbol table, LPC coefficients). Baseline is
-          raw int16 (16 bits/sample). The dashed line is the high-resolution entropy rate R — it
-          ignores dither and is unreliable where S(f) falls below one step² (see the response
-          plot).
+          Measured on a {BLOCK_SIZE.toLocaleString()}-sample block of the same latent data the
+          signal view shows; sizes include everything a decoder needs (ANS symbol table, LPC
+          coefficients). Baseline is raw int16 (16 bits/sample). The dashed line is the
+          theoretical rate R from the spectral formula in the math section — approximate where
+          quantization dominates the spectrum (see the S(f) = 1 threshold on the response plot).
         </p>
       </section>
 

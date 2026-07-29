@@ -20,18 +20,23 @@ export default function MathSection() {
       </p>
       <Display tex="x_n \sim \mathcal{N}(0,\sigma^2)\ \text{i.i.d.}, \qquad y = h * x, \qquad z_n = \operatorname{round}(y_n + d_n), \quad d_n \sim \mathcal{U}[-\tfrac12,\tfrac12)\ \text{or}\ 0" />
       <p>
-        The dashed reference line is the entropy rate of the stationary Gaussian process y,
-        quantized at unit step, in the fine-quantization (high-resolution) limit — the ideal
-        lossless rate in bits per sample:
+        The reference rate R treats the roundoff as an additive white noise floor on the spectrum
+        — σ<sub>q</sub>² = 1/12 without dither, 1/6 with it (the dither is stored in the
+        integers) — takes the one-step Wiener prediction error of the resulting process
+        (Szegő–Kolmogorov), and charges the exact entropy of that innovation quantized at unit
+        step:
       </p>
-      <Display tex="R \;=\; \tfrac12\log_2(2\pi e)\;+\;\int_0^{1/2} \log_2 S(f)\,df, \qquad S(f) = \sigma^2\,|H(f)|^2" />
+      <Display tex="S_z(f) = \sigma^2\,|H(f)|^2 + \sigma_q^2, \qquad \sigma_e^2 = \exp\!\Big(2\!\int_0^{1/2}\!\ln S_z(f)\,df\Big), \qquad R = H_{\Delta}(\sigma_e)" />
+      <Display tex="H_{\Delta}(s) = -\sum_{z\in\mathbb{Z}} p_z \log_2 p_z, \qquad p_z = \Phi\!\Big(\tfrac{z+\frac12}{s}\Big) - \Phi\!\Big(\tfrac{z-\frac12}{s}\Big)" />
       <p>
-        with f in cycles per sample. With no filter this reduces to ½ log₂(2πe σ²). The formula
-        holds when S(f) is well above one step² across the band; where the response dips toward or
-        below the quantization step — deep stopbands, small σ — the true entropy rate is larger
-        than R (and R can even go negative), and no fixed-order predictor fully whitens the
-        process. Quantifying that gap, the effect of dither, and why LPC + ANS is the right
-        yardstick is the subject of the full derivation, still to be written.
+        with f in cycles per sample. In the fine-quantization regime (S ≫ 1 everywhere) this
+        reduces to the classical Gaussian entropy rate ½ log₂(2πe) + ∫ log₂ S(f) df — and with
+        no filter, to ½ log₂(2πe σ²). The noise floor keeps R finite and positive where a deep
+        stopband pushes S(f) below one step², which is where the classical formula diverges to
+        −∞. It is still an approximation: roundoff is not truly white, independent, or Gaussian,
+        prediction is from the quantized past, and everything degrades when the whole signal
+        hides inside the dead zone (σ_y ≪ 1). Quantifying that gap — and why LPC + ANS is the
+        right yardstick — is the subject of the full derivation, still to be written.
       </p>
     </div>
   )

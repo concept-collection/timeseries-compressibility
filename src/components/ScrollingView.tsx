@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Pipeline } from '../model/pipeline'
 
 /** Display samples generated per second; px per sample is fixed below. */
@@ -15,9 +15,10 @@ function niceStep(span: number): number {
 }
 
 /**
- * The endlessly generated quantized signal z, drawn sample-and-hold so the
- * integer staircase is visible once σ is small. Rendering is a canvas ring
- * buffer fed by the same Pipeline the compression worker uses.
+ * The generated quantized signal z, drawn sample-and-hold so the integer
+ * staircase is visible once σ is small. Rendering is a canvas ring buffer fed
+ * by the same Pipeline the compression worker uses. Stationary by default — a
+ * fresh window per parameter change — with a play toggle to let it stream.
  */
 export default function ScrollingView(props: {
   kernel: Float64Array
@@ -28,6 +29,9 @@ export default function ScrollingView(props: {
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const seedRef = useRef(1)
+  const [playing, setPlaying] = useState(false)
+  const playingRef = useRef(playing)
+  playingRef.current = playing
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -68,10 +72,14 @@ export default function ScrollingView(props: {
       raf = requestAnimationFrame(draw)
       const dt = Math.min(0.25, (now - last) / 1000)
       last = now
-      carry += dt * RATE
-      const n = Math.floor(carry)
-      carry -= n
-      if (n > 0) push(pipeline.next(n))
+      if (playingRef.current) {
+        carry += dt * RATE
+        const n = Math.floor(carry)
+        carry -= n
+        if (n > 0) push(pipeline.next(n))
+      } else {
+        carry = 0
+      }
 
       const dpr = window.devicePixelRatio || 1
       const w = canvas.clientWidth
@@ -142,5 +150,12 @@ export default function ScrollingView(props: {
     }
   }, [props.kernel, props.sigma, props.dither, props.sigmaY])
 
-  return <canvas ref={canvasRef} className="scroll-canvas" />
+  return (
+    <div className="scroll-wrap">
+      <canvas ref={canvasRef} className="scroll-canvas" />
+      <button className="play-btn" onClick={() => setPlaying(p => !p)}>
+        {playing ? '⏸ pause' : '▶ play'}
+      </button>
+    </div>
+  )
 }

@@ -118,8 +118,9 @@ export default function App() {
         <h2>Quantized signal z</h2>
         <ScrollingView kernel={kernel} sigma={sigma} dither={dither} sigmaY={sigmaY} />
         <p className="card-note">
-          Continuously generated from the model; sample-and-hold rendering, so the integer
-          staircase appears as σ approaches the quantization step.
+          A window of samples from the model, redrawn when parameters change; press play to watch
+          it stream. Sample-and-hold rendering, so the integer staircase appears as σ approaches
+          the quantization step.
         </p>
       </section>
 

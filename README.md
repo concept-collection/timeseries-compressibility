@@ -5,8 +5,9 @@ Interactive exploration of how compressible quantized time series are.
 The generating model is: i.i.d. Gaussian noise (std σ, measured in quantization
 steps) → FIR filter → optional additive uniform dither on [-½, ½) → round to
 integers. The app shows the filter (convolution kernel and frequency response,
-with cutoffs in Hz against a chosen sample rate), an endlessly scrolling view of
-the generated integer signal, and the measured compression of a 120,000-sample
+with cutoffs in Hz against a chosen sample rate), a window of the generated
+integer signal (stationary by default, with a play toggle to let it stream
+endlessly), and the measured compression of a 120,000-sample
 block under nine methods — zlib, zstd, and an rANS entropy coder, each raw,
 delta-coded, and LPC-residual-coded — as bits per sample and as ratio against
 raw int16 storage.

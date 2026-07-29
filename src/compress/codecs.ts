@@ -71,25 +71,42 @@ function ansSize(
 }
 
 /** Predictor orders the UI offers; 32 is the FLAC default and ours. */
-export const LPC_ORDERS = [1, 2, 4, 8, 16, 32, 64, 128]
+export const LPC_ORDERS = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
 export const DEFAULT_LPC_ORDER = 32
 
-/** Fit the predictor and take the residual, with the coefficients' cost. */
-function lpcTransform(
-  samples: Int16Array,
-  order: number,
-): {
+interface LpcTransform {
   residual: Int16Array
   restore: (residual: Int16Array) => Int16Array
   extraBytes: number
-} {
+}
+
+/**
+ * The fit and the residual are wanted four times per measurement — once by
+ * each LPC codec and once by the entropy bound — and cost O(order · N) each,
+ * which is seconds at the top of the order range. Compute once per
+ * (samples, order); the entry dies with the sample block.
+ */
+const transformCache = new WeakMap<Int16Array, Map<number, LpcTransform>>()
+
+/** Fit the predictor and take the residual, with the coefficients' cost. */
+function lpcTransform(samples: Int16Array, order: number): LpcTransform {
+  let byOrder = transformCache.get(samples)
+  if (!byOrder) {
+    byOrder = new Map()
+    transformCache.set(samples, byOrder)
+  }
+  const cached = byOrder.get(order)
+  if (cached) return cached
+
   const model = fitLpc(samples, order)
   if (!model) throw new Error('LPC fit failed')
-  return {
+  const transform: LpcTransform = {
     residual: lpcResidual(samples, model),
     restore: residual => lpcRestore(residual, model),
     extraBytes: modelSize(model),
   }
+  byOrder.set(order, transform)
+  return transform
 }
 
 export const ZLIB: Codec = {
@@ -239,19 +256,21 @@ export interface CodecResult {
   bitsPerSample: number
 }
 
-/** Compress one int16 buffer with each of the given codecs. */
-export function compressAll(buffer: Uint8Array, codecs: Codec[]): CodecResult[] {
-  // The session's buffer may sit at an odd offset; align before viewing as int16.
-  const aligned = buffer.byteOffset % 2 === 0 ? buffer : new Uint8Array(buffer)
-  const samples = new Int16Array(aligned.buffer, aligned.byteOffset, aligned.byteLength / 2)
+/**
+ * Compress one int16 block with each of the given codecs. Takes the samples
+ * rather than raw bytes so every codec — and the entropy bounds — key the
+ * LPC cache off the same array.
+ */
+export function compressAll(samples: Int16Array, codecs: Codec[]): CodecResult[] {
+  const bytes = asBytes(samples)
   return codecs.map(codec => {
-    const bytes = codec.size(samples, aligned)
+    const size = codec.size(samples, bytes)
     return {
       codec: codec.name,
       note: codec.note,
-      bytes,
-      ratio: aligned.byteLength / bytes,
-      bitsPerSample: (8 * bytes) / samples.length,
+      bytes: size,
+      ratio: bytes.byteLength / size,
+      bitsPerSample: (8 * size) / samples.length,
     }
   })
 }

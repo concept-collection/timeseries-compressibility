@@ -56,10 +56,9 @@ self.onmessage = async (e: MessageEvent<CompressRequest>) => {
     }
     const mean = sum / samples.length
     const empiricalStd = Math.sqrt(Math.max(0, sumSq / samples.length - mean * mean))
-    const bytes = new Uint8Array(samples.buffer, 0, samples.byteLength)
     post({
       id,
-      results: compressAll(bytes, [...PLAIN_CODECS, ...lpcCodecs(lpcOrder)]),
+      results: compressAll(samples, [...PLAIN_CODECS, ...lpcCodecs(lpcOrder)]),
       bounds: entropyBounds(samples, lpcOrder),
       empiricalStd,
     })

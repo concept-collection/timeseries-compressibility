@@ -32,11 +32,7 @@ Where the spectrum sits well above one step² this reduces to the classical
 Gaussian entropy rate ½log₂(2πe) + ∫log₂S df; the noise floor keeps it finite
 and positive where a deep stopband would send that integral to −∞. LPC + ANS
 should approach R; probing where the approximation holds is the point. The
-math section is a stub for the full derivation. The formula is *not* exact —
-[docs/mc-true-rate.md](docs/mc-true-rate.md) analyzes its error sources and
-specifies a sequential Monte Carlo estimator of the true entropy rate
-(implementable standalone, e.g. in Python) with a two-sided convergence
-certificate.
+math section is a stub for the full derivation.
 
 ## Run it
 
@@ -56,6 +52,10 @@ src/compress/    lossless codecs run in the browser: zlib (fflate), zstd (wasm),
                  integer LPC; borrowed from entropy-quantized-linear-transform
 src/worker/      the codecs run off the main thread on a debounced parameter set
 src/components/  controls, filter plots, signal canvas, compression chart
+scripts/         true_rate.py — Monte-Carlo ground truth for R (Gibbs over the
+                 latent Gaussian given the observed integers, Rao-Blackwellized
+                 next-sample pmf); the app prints the exact command to run.
+                 Requires numpy only.
 ```
 
 Every reported size round-trips through the decoder and includes whatever the

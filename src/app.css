@@ -463,46 +463,40 @@ body {
   font-weight: 500;
 }
 
-/* ---- MC cross-check command ---- */
-
-.cli-row {
+.command-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px 10px;
   margin-top: 10px;
-  min-width: 0;
-}
-
-.cli-label {
   font-size: 12px;
   color: var(--muted);
-  white-space: nowrap;
 }
 
-.cli-row code {
-  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+.command-row code {
+  background: var(--page);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 8px;
   font-size: 11.5px;
   color: var(--ink-2);
-  background: color-mix(in srgb, var(--grid) 45%, transparent);
-  border-radius: 6px;
-  padding: 4px 8px;
   overflow-x: auto;
   white-space: nowrap;
+  max-width: 100%;
 }
 
-.copy-btn {
+.command-row button {
   background: var(--surface);
   color: var(--ink-2);
   border: 1px solid var(--baseline);
   border-radius: 6px;
-  padding: 3px 10px;
+  padding: 2px 10px;
   font: inherit;
-  font-size: 12px;
+  font-size: 11.5px;
   cursor: pointer;
-  white-space: nowrap;
 }
 
-.copy-btn:hover {
+.command-row button:hover {
   color: var(--ink);
 }
 

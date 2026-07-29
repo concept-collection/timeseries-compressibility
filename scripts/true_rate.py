@@ -1,335 +1,318 @@
 #!/usr/bin/env python3
-"""Monte Carlo estimate of the true entropy rate of the quantized filtered
-Gaussian pipeline, alongside the closed-form approximation the UI plots.
+"""Monte-Carlo ground truth for the theoretical rate R shown in the app.
 
-Implements docs/mc-true-rate.md: sequential Monte Carlo (Genz separation of
-variables with resampling) over the latent Gaussian path constrained to the
-observed integer boxes. All systematic errors are upward, so the estimate
-converges to the true R from above; double --particles and compare to check
-convergence.
+Model (matching the app): x iid N(0, sigma^2) -> y = h * x -> optional
+additive uniform dither on [-1/2, 1/2) -> z = round(.). The entropy rate
+H = E[-log2 P(z_next | past)] is the true lossless limit in bits/sample.
+(The app applies the kernel zero-phase; a time shift does not change the
+law of the process, so causal convolution is used here.)
 
-The UI shows the exact command for the current parameter set. Requires
-numpy and scipy.
+Method
+  1. Draw a past: sample x (and dither) from the prior and push it through
+     the pipeline to get z_1..z_M.
+  2. The generating x is itself an exact draw from p(x | z_1..z_M), so a
+     Gibbs chain started there is already in stationarity - no burn-in
+     bias, only autocorrelation.
+  3. Gibbs-sample x | z: this posterior is a box-truncated multivariate
+     normal, and each conditional x_i | rest is N(0, sigma^2) truncated to
+     an interval read off the <= L constraint boxes x_i appears in. With
+     dither on, the dither values are extra latents with uniform
+     conditionals. Coordinates a multiple of L apart share no constraint,
+     so each of the L "colors" is updated as one vectorized block.
+  4. Rao-Blackwellization: given a chain state, the next sample is
+     z_next = round(c + h_0 * x_free (+ d)) with x_free ~ N(0, sigma^2)
+     still unconstrained, so P(z_next = j | state) has a closed form.
+     Averaging these pmfs over the chain gives P(z_next | past) exactly in
+     the limit; its entropy is the conditional entropy for that past.
+  5. Average over independent pasts; report mean +/- standard error.
 
-Examples:
-  python scripts/true_rate.py --sigma 5 --filter bandpass --low-hz 300 \
-      --high-hz 6000 --taps 101 --sample-rate 30000
-  python scripts/true_rate.py --sigma 0.5 --filter none
-  python scripts/true_rate.py --selftest
+The estimate targets H(z_{M+1} | z_1..z_M), which is an upper bound on the
+rate and decreases toward it as --past grows beyond the memory of the
+process. More --sweeps reduces the (downward) plug-in bias from noise in
+the averaged pmf; narrowband filters and large sigma mix more slowly and
+deserve more sweeps.
+
+Requires numpy only.
 """
 
 import argparse
 import math
-import sys
 
 import numpy as np
-from scipy.special import log_ndtr, logsumexp, ndtr, ndtri
+
+SQRT2PI = math.sqrt(2 * math.pi)
+
 
 # ---------------------------------------------------------------- kernels
+# Ported from src/model/filters.ts; must stay in step with it.
 
-def windowed_sinc_lowpass(fc: float, taps: int) -> np.ndarray:
-    n = taps if taps % 2 == 1 else taps + 1
+def windowed_sinc_lowpass(fc, taps):
+    n = taps | 1
+    mid = (n - 1) / 2
     i = np.arange(n)
-    t = i - (n - 1) / 2
-    with np.errstate(invalid="ignore", divide="ignore"):
-        sinc = np.where(t == 0, 2 * fc, np.sin(2 * np.pi * fc * t) / (np.pi * t))
+    t = i - mid
+    sinc = np.where(t == 0, 2 * fc, np.sin(2 * np.pi * fc * t) / (np.pi * np.where(t == 0, 1, t)))
     w = 0.54 - 0.46 * np.cos(2 * np.pi * i / (n - 1))
     h = sinc * w
     return h / h.sum()
 
 
-def design_kernel(args) -> np.ndarray:
-    f = args.filter
-    if f == "none":
+def design_kernel(args):
+    if args.filter == 'none':
         return np.array([1.0])
-    if f == "first-difference":
-        return np.array([1.0, -1.0])
-    if f == "moving-average":
+    if args.filter == 'moving-average':
         return np.full(args.width, 1.0 / args.width)
-    if f == "lowpass":
-        return windowed_sinc_lowpass(args.cutoff_hz / args.sample_rate, args.taps)
-    if f == "bandpass":
-        lo = windowed_sinc_lowpass(args.low_hz / args.sample_rate, args.taps)
-        hi = windowed_sinc_lowpass(args.high_hz / args.sample_rate, args.taps)
+    if args.filter == 'lowpass':
+        return windowed_sinc_lowpass(args.high / args.rate, args.taps)
+    if args.filter == 'bandpass':
+        lo = windowed_sinc_lowpass(args.low / args.rate, args.taps)
+        hi = windowed_sinc_lowpass(args.high / args.rate, args.taps)
         return hi - lo
-    raise ValueError(f)
+    if args.filter == 'first-difference':
+        return np.array([1.0, -1.0])
+    raise ValueError(args.filter)
 
-# ------------------------------------------------- closed-form quantities
 
-def h_delta(s: float) -> float:
-    """Exact entropy (bits) of round(N(0, s^2)) on the unit lattice."""
-    if s <= 0:
+# ------------------------------------------------- the app's formula for R
+# Ported from src/model/theory.ts. Phi via math.erf (machine precision).
+
+def quantized_gaussian_entropy(s):
+    if s <= 0.02:
         return 0.0
-    zmax = int(np.ceil(8 * s + 4))
-    z = np.arange(-zmax, zmax + 1)
-    p = ndtr((z + 0.5) / s) - ndtr((z - 0.5) / s)
-    p = p[p > 1e-300]
-    return float(-(p @ np.log2(p)))
+    zmax = int(math.ceil(8 * s + 4))
+    H = 0.0
+    prev = 0.5 * (1 + math.erf((-zmax - 0.5) / (s * math.sqrt(2))))
+    for z in range(-zmax, zmax + 1):
+        cur = 0.5 * (1 + math.erf((z + 0.5) / (s * math.sqrt(2))))
+        p = cur - prev
+        prev = cur
+        if p > 0:
+            H -= p * math.log2(p)
+    return H
 
 
-def magnitude_sq(h: np.ndarray, f: np.ndarray) -> np.ndarray:
-    n = np.arange(len(h))
-    e = np.exp(-2j * np.pi * np.outer(f, n))
-    H = e @ h
-    return np.abs(H) ** 2
+def formula_rate(kernel, sigma, dither, points=8192):
+    noise_var = 1 / 6 if dither else 1 / 12
+    f = (0.5 * (np.arange(points) + 0.5)) / points
+    w = -2j * np.pi * np.outer(f, np.arange(len(kernel)))
+    S = sigma * sigma * np.abs(np.exp(w) @ kernel) ** 2
+    integral = float(np.log2(S + noise_var).mean()) * 0.5
+    return quantized_gaussian_entropy(2.0 ** integral)
 
 
-def r_approx(h: np.ndarray, sigma: float, dither: bool, points: int = 8192) -> float:
-    """The UI's formula: noise-floored Szego prediction error through H_delta."""
-    floor = 1 / 6 if dither else 1 / 12
-    f = (np.arange(points) + 0.5) * 0.5 / points
-    s_z = sigma**2 * magnitude_sq(h, f) + floor
-    integral = float(np.log2(s_z).mean() * 0.5)
-    return h_delta(2.0**integral)
+# ------------------------------------------------ vectorized normal helpers
 
-# ----------------------------------------------------------- MC estimator
-
-def autocovariance(h: np.ndarray, sigma: float, kmax: int) -> np.ndarray:
-    full = sigma**2 * np.correlate(h, h, "full")
-    r = np.zeros(kmax + 1)
-    take = min(kmax + 1, len(h))
-    r[:take] = full[len(h) - 1 : len(h) - 1 + take]
-    return r
+def norm_pdf(t):
+    return np.exp(-0.5 * t * t) / SQRT2PI
 
 
-def levinson_all(r: np.ndarray, kmax: int):
-    """Prediction coefficients for every order 0..kmax and innovation variances.
-
-    A[p] holds a_1..a_p with yhat_t = sum_j a_j y_{t-j}; v[p] is the order-p
-    prediction error variance.
-    """
-    A = [np.zeros(0)]
-    v = np.zeros(kmax + 1)
-    v[0] = r[0]
-    a = np.zeros(kmax)
-    for p in range(1, kmax + 1):
-        acc = r[p] - (a[: p - 1] @ r[p - 1 : 0 : -1] if p > 1 else 0.0)
-        k = acc / v[p - 1]
-        if p > 1:
-            a[: p - 1] = a[: p - 1] - k * a[p - 2 :: -1]
-        a[p - 1] = k
-        v[p] = max(v[p - 1] * (1 - k * k), 1e-30)
-        A.append(a[:p].copy())
-    return A, v
+def norm_cdf(t):
+    """Abramowitz-Stegun 26.2.17; |error| < 7.5e-8, plenty for sampling and
+    for pmf weights whose entropy is wanted to ~1e-4 bits."""
+    t = np.asarray(t, dtype=float)
+    z = np.abs(t)
+    k = 1.0 / (1.0 + 0.2316419 * z)
+    poly = k * (0.319381530 + k * (-0.356563782 + k * (1.781477937 + k * (-1.821255978 + k * 1.330274429))))
+    tail = norm_pdf(z) * poly
+    return np.where(t >= 0, 1.0 - tail, tail)
 
 
-def log_phi_diff(alpha: np.ndarray, beta: np.ndarray) -> np.ndarray:
-    """log(Phi(beta) - Phi(alpha)) elementwise, safe in both tails."""
-    out = np.empty_like(alpha)
-    hi_tail = alpha >= 0  # reflect to the lower tail
-    a = np.where(hi_tail, -beta, alpha)
-    b = np.where(hi_tail, -alpha, beta)
-    straddle = b >= 0  # a < 0 <= b: safe in linear space
-    with np.errstate(divide="ignore"):
-        out[straddle] = np.log(ndtr(b[straddle]) - ndtr(a[straddle]))
-    lo = ~straddle  # both below 0: log-space difference
-    la, lb = log_ndtr(a[lo]), log_ndtr(b[lo])
-    out[lo] = lb + np.log1p(-np.exp(np.minimum(la - lb, -1e-12)))
-    return out
+def norm_ppf(p):
+    """Acklam's rational approximation to the standard normal quantile."""
+    a = (-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02,
+         1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00)
+    b = (-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02,
+         6.680131188771972e+01, -1.328068155288572e+01)
+    c = (-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00,
+         -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00)
+    d = (7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00,
+         3.754408661907416e+00)
+    p = np.asarray(p, dtype=float)
+    x = np.empty_like(p)
+    plow, phigh = 0.02425, 1 - 0.02425
+
+    lo = p < plow
+    hi = p > phigh
+    mid = ~(lo | hi)
+
+    if mid.any():
+        q = p[mid] - 0.5
+        r = q * q
+        x[mid] = (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / \
+                 (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1)
+    if lo.any():
+        q = np.sqrt(-2 * np.log(p[lo]))
+        x[lo] = (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / \
+                ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1)
+    if hi.any():
+        q = np.sqrt(-2 * np.log(1 - p[hi]))
+        x[hi] = -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / \
+                ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1)
+    return x
 
 
-def sample_truncated(mu, s, lo, hi, rng):
-    """Sample N(mu, s^2) truncated to [lo, hi], vectorized, tail-safe by
-    reflection. Callers guarantee the interval has nonzero mass."""
-    alpha = (lo - mu) / s
-    beta = (hi - mu) / s
-    flip = alpha > 0
-    a = np.where(flip, -beta, alpha)
-    b = np.where(flip, -alpha, beta)
-    pa, pb = ndtr(a), ndtr(b)
-    u = pa + rng.random(len(mu)) * (pb - pa)
-    x = ndtri(np.clip(u, 1e-320, 1 - 1e-16))
+def trunc_std_normal(lo, hi, rng):
+    """Standard normal truncated to [lo, hi], by inverse CDF. Mirrored into
+    the lower tail so the CDF differences keep precision."""
+    flip = (lo + hi) > 0
+    a = np.where(flip, -hi, lo)
+    b = np.where(flip, -lo, hi)
+    Fa = norm_cdf(a)
+    Fb = norm_cdf(b)
+    u = Fa + (Fb - Fa) * rng.random(a.shape)
+    x = norm_ppf(np.clip(u, 1e-300, 1 - 1e-16))
     x = np.where(flip, -x, x)
-    return mu + s * np.clip(x, alpha, beta)
+    return np.clip(x, lo, hi)
 
 
-def generate_z(h, sigma, dither, T, rng):
-    L = len(h)
-    x = rng.standard_normal(T + L - 1) * sigma
-    y = np.convolve(x, h, "valid")
+# --------------------------------------------------------- the RB next-pmf
+
+def big_g(t):
+    """G(t) = t Phi(t) + phi(t), the antiderivative of Phi."""
+    return t * norm_cdf(t) + norm_pdf(t)
+
+
+def next_pmf(c, s0, dither):
+    """P(z_next = j | chain state): round(c + N(0, s0^2) (+ U(-1/2,1/2)))."""
+    s = max(s0, 1e-12)
+    half = 8 * s + (1.0 if dither else 0.0) + 1.0
+    js = np.arange(math.floor(c - half), math.ceil(c + half) + 1)
     if dither:
-        y = y + rng.uniform(-0.5, 0.5, T)
-    return np.round(y).astype(np.int64)
+        # Integrating the Gaussian bin probability over the dither gives a
+        # second difference of G; as s -> 0 it degrades gracefully to the
+        # uniform-overlap width.
+        p = s * (big_g((js + 1 - c) / s) - 2 * big_g((js - c) / s) + big_g((js - 1 - c) / s))
+    else:
+        edges = norm_cdf((np.append(js, js[-1] + 1) - 0.5 - c) / s)
+        p = np.diff(edges)
+    return js, np.maximum(p, 0.0)
 
 
-def smc_replicate(h, sigma, dither, T, burn, N, kmax, rng):
-    """One replicate: -(1/(T-burn)) sum log2 phat(z_t | z_<t) after burn-in."""
-    A, v = levinson_all(autocovariance(h, sigma, kmax), kmax)
-    s_by_order = np.sqrt(v)
-    z = generate_z(h, sigma, dither, T, rng)
+# ---------------------------------------------------------------- one past
 
-    W = np.zeros((N, kmax), dtype=np.float32)  # each particle's last kmax values
-    log_p = np.zeros(T)
-    bad_steps = 0
-    for t in range(T):
-        p = min(t, kmax)
-        a = A[p]
-        s = s_by_order[p]
-        mu = (W[:, kmax - p :] @ a[::-1].astype(np.float32)).astype(np.float64) if p else np.zeros(N)
-        d = rng.uniform(-0.5, 0.5, N) if dither else 0.0
-        lo = z[t] - 0.5 - d
-        hi = z[t] + 0.5 - d
-        logw = log_phi_diff((lo - mu) / s, (hi - mu) / s)
-        lse = logsumexp(logw)
-        if not np.isfinite(lse):
-            raise RuntimeError(
-                f"particle collapse at step {t}: no particle is consistent with "
-                f"the observation — rerun with more --particles"
-            )
-        log_p[t] = lse - math.log(N)
-        # A per-step surprisal beyond ~40 bits means the particle cloud has
-        # drifted away from every path consistent with the data — the
-        # genealogical-collapse failure mode of docs/mc-true-rate.md §5.3,
-        # not a property of the data. Fail loudly rather than average it in.
-        if -log_p[t] / math.log(2) > 40:
-            bad_steps += 1
-            if bad_steps > 25:
-                raise RuntimeError(
-                    "the sequential filter degenerated (near-deterministic dynamics; "
-                    "see docs/mc-true-rate.md §5.3) — this kernel needs the "
-                    "lookahead/twisted-proposal extension. Reduce --taps to study "
-                    "the trend with a shallower stopband."
-                )
-        # Systematic resampling, then extend the chosen ancestors.
-        probs = np.exp(logw - logw.max())
-        cdf = np.cumsum(probs)
-        cdf /= cdf[-1]
-        ancestors = np.searchsorted(cdf, (rng.random() + np.arange(N)) / N)
-        mu_a = mu[ancestors]
-        lo_a = lo[ancestors] if dither else np.full(N, lo)
-        hi_a = hi[ancestors] if dither else np.full(N, hi)
-        y_new = sample_truncated(mu_a, s, lo_a, hi_a, rng)
-        W = W[ancestors]
-        W[:, :-1] = W[:, 1:]
-        W[:, -1] = y_new.astype(np.float32)
-    return float(-log_p[burn:].mean() / math.log(2))
+def conditional_entropy_of_one_past(kernel, sigma, dither, M, sweeps, rng):
+    h = np.asarray(kernel, dtype=float)
+    L = len(h)
+    hr = h[::-1]
+    N = M + L - 1  # latents covering the windows of z_1..z_M
+
+    # The past, with its true latents as the (stationary) chain start.
+    x = sigma * rng.standard_normal(N)
+    y = np.convolve(x, h, mode='valid')
+    d = (rng.random(M) - 0.5) if dither else None
+    z = np.floor(y + (d if dither else 0.0) + 0.5)
+
+    # Boxes and y live in padded arrays so that every coordinate x_i sees
+    # exactly L constraint rows (rows outside the data are unconstrained).
+    P = L - 1
+    ypad = np.zeros(M + 2 * P)
+    lo = np.full(M + 2 * P, -np.inf)
+    hi = np.full(M + 2 * P, np.inf)
+
+    def set_boxes():
+        dd = d if dither else 0.0
+        lo[P:P + M] = z - 0.5 - dd
+        hi[P:P + M] = z + 0.5 - dd
+
+    set_boxes()
+
+    # Color classes: coordinates L apart share no constraint row, so a class
+    # updates as one vectorized block. Row i+j (padded) carries coefficient
+    # h[j] for coordinate i.
+    classes = [np.arange(c0, N, L) for c0 in range(L)]
+    rowmats = [idx[:, None] + np.arange(L)[None, :] for idx in classes]
+    nonzero = h != 0
+
+    s0 = sigma * abs(h[0])
+    pmf = {}
+
+    for _ in range(sweeps):
+        ypad[P:P + M] = np.convolve(x, h, mode='valid')  # kill fp drift
+        if dither:
+            ycur = ypad[P:P + M]
+            dlo = np.maximum(-0.5, z - 0.5 - ycur)
+            dhi = np.minimum(0.5, z + 0.5 - ycur)
+            d = dlo + np.maximum(dhi - dlo, 0.0) * rng.random(M)
+            set_boxes()
+        for idx, rows in zip(classes, rowmats):
+            r = ypad[rows] - np.outer(x[idx], h)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                b1 = (lo[rows] - r) / h[None, :]
+                b2 = (hi[rows] - r) / h[None, :]
+            xlo = np.where(h[None, :] > 0, b1, b2)
+            xhi = np.where(h[None, :] > 0, b2, b1)
+            xlo[:, ~nonzero] = -np.inf
+            xhi[:, ~nonzero] = np.inf
+            xlo = xlo.max(axis=1)
+            xhi = xhi.min(axis=1)
+            xnew = trunc_std_normal(xlo / sigma, xhi / sigma, rng) * sigma
+            delta = xnew - x[idx]
+            x[idx] = xnew
+            ypad[rows] += delta[:, None] * h[None, :]
+
+        c = float(hr[:-1] @ x[M:]) if L > 1 else 0.0
+        js, p = next_pmf(c, s0, dither)
+        for j, pj in zip(js, p):
+            if pj > 1e-15:
+                pmf[int(j)] = pmf.get(int(j), 0.0) + pj
+
+    total = sum(pmf.values())
+    return -sum((p / total) * math.log2(p / total) for p in pmf.values() if p > 0)
 
 
-def estimate_true_rate(h, sigma, dither, args, seed):
-    rates = []
-    for j in range(args.replicates):
-        rng = np.random.default_rng(seed + j)
-        r = smc_replicate(h, sigma, dither, args.steps, args.burn, args.particles, args.kmax, rng)
-        rates.append(r)
-        print(f"  replicate {j + 1}/{args.replicates}: {r:.4f}", flush=True)
-    rates = np.array(rates)
-    se = rates.std(ddof=1) / math.sqrt(len(rates)) if len(rates) > 1 else float("nan")
-    return rates.mean(), se
+# --------------------------------------------------------------------- main
 
-# ------------------------------------------------------------- self-test
-
-def selftest() -> int:
-    failures = 0
-
-    def check(name, got, want, tol):
-        nonlocal failures
-        ok = abs(got - want) <= tol
-        failures += 0 if ok else 1
-        print(f"  {'PASS' if ok else 'FAIL'} {name}: got {got:.5f}, want {want:.5f} (tol {tol})")
-
-    print("H_delta against reference values:")
-    for s, want in [(0.1, 0.00001), (0.3, 0.55042), (1, 2.10483), (5, 4.37142), (50, 7.69098)]:
-        check(f"H_delta({s})", h_delta(s), want, 2e-4)
-
-    print("Formula against reference values (iid):")
-    none = np.array([1.0])
-    for s, want in [(0.1, 0.57611), (1, 2.15829), (5, 4.37382), (100, 8.69096)]:
-        check(f"R_approx none sigma={s}", r_approx(none, s, False), want, 1e-3)
-
-    print("Formula against reference values (default bandpass, end-to-end kernel check):")
-    lo = windowed_sinc_lowpass(300 / 30000, 101)
-    hi = windowed_sinc_lowpass(6000 / 30000, 101)
-    bp = hi - lo
-    check("||h||_2", float(np.sqrt((bp**2).sum())), 0.60216, 1e-4)
-    for s, want in [(0.5, 0.8620), (5, 1.9397), (20, 2.7282), (100, 3.7166)]:
-        check(f"R_approx bandpass sigma={s}", r_approx(bp, s, False), want, 1e-3)
-    check("R_approx bandpass sigma=5 dither", r_approx(bp, 5, True), 2.2111, 1e-3)
-
-    print("Quick MC on the exact iid case (truth = H_delta(sigma)):")
-    rng = np.random.default_rng(1)
-    est = smc_replicate(none, 5.0, False, T=1500, burn=300, N=512, kmax=8, rng=rng)
-    check("MC none sigma=5", est, h_delta(5.0), 0.05)
-    est = smc_replicate(none, 0.5, False, T=1500, burn=300, N=512, kmax=8, rng=rng)
-    check("MC none sigma=0.5", est, h_delta(0.5), 0.05)
-
-    print("FAILED" if failures else "all tests passed")
-    return 1 if failures else 0
-
-# ------------------------------------------------------------------ main
-
-def main() -> int:
+def main():
     ap = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    ap.add_argument("--sigma", type=float, default=5.0, help="input std in quantization steps")
-    ap.add_argument(
-        "--filter",
-        choices=["none", "moving-average", "lowpass", "bandpass", "first-difference"],
-        default="none",
-    )
-    ap.add_argument("--low-hz", type=float, default=300, help="bandpass low edge")
-    ap.add_argument("--high-hz", type=float, default=6000, help="bandpass high edge")
-    ap.add_argument("--cutoff-hz", type=float, default=6000, help="lowpass cutoff")
-    ap.add_argument("--taps", type=int, default=101, help="windowed-sinc kernel length")
-    ap.add_argument("--width", type=int, default=8, help="moving-average width")
-    ap.add_argument("--sample-rate", type=float, default=30000)
-    ap.add_argument("--dither", action="store_true")
-    ap.add_argument("--particles", type=int, default=2048)
-    ap.add_argument("--steps", type=int, default=3000)
-    ap.add_argument("--burn", type=int, default=800)
-    ap.add_argument("--replicates", type=int, default=8)
-    ap.add_argument("--kmax", type=int, default=0, help="predictor memory; 0 = auto (4L, capped 512)")
-    ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--selftest", action="store_true")
+        description='Monte-Carlo estimate of the true entropy rate, for '
+                    'checking the analytic rate R shown in the app.')
+    ap.add_argument('--sigma', type=float, required=True, help='input std, in quantization steps')
+    ap.add_argument('--filter', required=True,
+                    choices=['none', 'moving-average', 'lowpass', 'bandpass', 'first-difference'])
+    ap.add_argument('--low', type=float, help='bandpass low edge, Hz')
+    ap.add_argument('--high', type=float, help='lowpass cutoff / bandpass high edge, Hz')
+    ap.add_argument('--taps', type=int, default=101, help='windowed-sinc kernel length')
+    ap.add_argument('--width', type=int, default=8, help='moving-average width')
+    ap.add_argument('--rate', type=float, default=30000, help='sample rate, Hz')
+    ap.add_argument('--dither', action='store_true')
+    ap.add_argument('--past', type=int, help='conditioning window M (default max(512, 4·taps))')
+    ap.add_argument('--pasts', type=int, default=24, help='independent pasts to average')
+    ap.add_argument('--sweeps', type=int, default=600, help='Gibbs sweeps per past')
+    ap.add_argument('--seed', type=int, default=0)
     args = ap.parse_args()
 
-    if args.selftest:
-        return selftest()
+    if args.filter == 'bandpass' and (args.low is None or args.high is None):
+        ap.error('bandpass needs --low and --high')
+    if args.filter == 'lowpass' and args.high is None:
+        ap.error('lowpass needs --high')
 
-    h = design_kernel(args)
-    L = len(h)
-    if args.kmax == 0:
-        args.kmax = min(max(4 * L, 64), 512)
-    args.burn = max(args.burn, 2 * args.kmax)
-    if args.steps <= args.burn + 500:
-        args.steps = args.burn + 2000
+    kernel = design_kernel(args)
+    L = len(kernel)
+    M = args.past if args.past is not None else max(512, 4 * L)
 
-    norm = float(np.sqrt((h**2).sum()))
-    formula = r_approx(h, args.sigma, args.dither)
-    _, v = levinson_all(autocovariance(h, args.sigma, args.kmax), args.kmax)
-    s_inn = math.sqrt(v[args.kmax])
-    print(f"kernel: {args.filter}, L={L}, ||h||2={norm:.5f}, sigma_y={args.sigma * norm:.3f}, "
-          f"innovation std={s_inn:.4f}")
-    if s_inn < 0.12:
-        print("warning: innovation std << quantization step — near-deterministic dynamics. "
-              "The plain sequential filter (docs/mc-true-rate.md §5.3) will likely degenerate "
-              "here; reduce --taps for a shallower stopband, or implement the "
-              "lookahead/twisted-proposal extension.")
-    print(f"formula (as in the UI): R = {formula:.4f} bits/sample"
-          + (f", ideal ratio {16 / formula:.3f}x vs int16" if formula > 0 else ""))
-    if args.filter == "none":
-        exact = h_delta(args.sigma) if not args.dither else None
-        if exact is not None:
-            print(f"exact truth (iid closed form): R = {exact:.4f} bits/sample"
-                  + (f", ideal ratio {16 / exact:.3f}x vs int16" if exact > 0 else ""))
+    R = formula_rate(kernel, args.sigma, args.dither)
+    print(f'model: sigma={args.sigma} filter={args.filter} L={L} dither={args.dither}')
+    print(f'formula R (as shown in the app): {R:.4f} bits/sample'
+          f'  (ratio vs int16: {16 / R:.3f}x)' if R > 0 else f'formula R: {R:.4f} bits/sample')
+    print(f'MC: {args.pasts} pasts x {args.sweeps} sweeps, conditioning on M={M} samples')
 
-    print(f"MC (N={args.particles} particles, T={args.steps} steps, burn={args.burn}, "
-          f"kmax={args.kmax}, {args.replicates} replicates):")
-    try:
-        mean, se = estimate_true_rate(h, args.sigma, args.dither, args, args.seed)
-    except RuntimeError as e:
-        print(f"aborted: {e}")
-        return 2
-    line = f"MC true rate: R = {mean:.4f} +/- {se:.4f} bits/sample"
-    if mean > 0:
-        # First-order error propagation: d(16/R) = 16 dR / R^2.
-        line += f", ideal ratio {16 / mean:.3f}x +/- {16 * se / mean**2:.3f} vs int16"
-    print(line)
-    print(f"difference (formula - MC): {formula - mean:+.4f} bits/sample")
-    print("note: finite window and inner MC both bias the estimate upward; "
-          "double --particles and compare to confirm convergence.")
-    return 0
+    rng = np.random.default_rng(args.seed)
+    Hs = []
+    for i in range(args.pasts):
+        Hs.append(conditional_entropy_of_one_past(
+            kernel, args.sigma, args.dither, M, args.sweeps, rng))
+        mean = float(np.mean(Hs))
+        se = float(np.std(Hs, ddof=1) / math.sqrt(len(Hs))) if len(Hs) > 1 else float('nan')
+        print(f'  past {i + 1:3d}/{args.pasts}: H = {Hs[-1]:.4f}   running mean {mean:.4f} +/- {se:.4f}')
+
+    mean = float(np.mean(Hs))
+    se = float(np.std(Hs, ddof=1) / math.sqrt(len(Hs)))
+    print(f'\nMC entropy rate: {mean:.4f} +/- {se:.4f} bits/sample'
+          f'  (ratio vs int16: {16 / mean:.3f}x)')
+    print(f'formula R:       {R:.4f} bits/sample   (formula - MC = {R - mean:+.4f})')
+    print('note: the MC value estimates H(z_next | M past samples), an upper bound '
+          'on the rate that tightens as --past grows.')
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+if __name__ == '__main__':
+    main()

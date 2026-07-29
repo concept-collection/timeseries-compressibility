@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import CopyableCommand from './components/CopyableCommand'
 import Controls from './components/Controls'
 import FilterViz from './components/FilterViz'
 import ScrollingView from './components/ScrollingView'
 import CompressionChart from './components/CompressionChart'
 import MathSection from './components/MathSection'
-import TrueRateCommand from './components/TrueRateCommand'
 import { DEFAULT_SPEC, clampSpec, designKernel, kernelNorm } from './model/filters'
 import { theoreticalRateBits } from './model/theory'
 import { LATENT_SEED } from './model/latent'
@@ -83,6 +83,36 @@ function useCompression(
   }, [kernel, sigma, dither, lpcOrder, blockSize])
 
   return state
+}
+
+/** The terminal command for scripts/true_rate.py at the current settings. */
+function mcCommand(sigma: number, spec: ReturnType<typeof clampSpec>, rate: number, dither: boolean): string {
+  const parts = ['python scripts/true_rate.py', `--sigma ${sigma}`]
+  switch (spec.family) {
+    case 'none':
+      parts.push('--filter none')
+      break
+    case 'movingAverage':
+      parts.push('--filter moving-average', `--width ${spec.width}`)
+      break
+    case 'lowpass':
+      parts.push('--filter lowpass', `--high ${spec.highHz}`, `--taps ${spec.taps}`, `--rate ${rate}`)
+      break
+    case 'bandpass':
+      parts.push(
+        '--filter bandpass',
+        `--low ${spec.lowHz}`,
+        `--high ${spec.highHz}`,
+        `--taps ${spec.taps}`,
+        `--rate ${rate}`,
+      )
+      break
+    case 'firstDifference':
+      parts.push('--filter first-difference')
+      break
+  }
+  if (dither) parts.push('--dither')
+  return parts.join(' ')
 }
 
 export default function App() {
@@ -203,7 +233,10 @@ export default function App() {
           formula in the math section — approximate where quantization dominates the spectrum
           (see the S(f) = 1 threshold on the response plot).
         </p>
-        <TrueRateCommand sigma={sigma} spec={spec} sampleRateHz={sampleRateHz} dither={dither} />
+        <CopyableCommand
+          label="check R against a Monte-Carlo ground truth (runs locally, ~2 min):"
+          command={mcCommand(sigma, spec, sampleRateHz, dither)}
+        />
       </section>
 
       <section className="card">

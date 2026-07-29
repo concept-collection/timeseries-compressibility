@@ -95,8 +95,9 @@ export default function App() {
         </p>
       </header>
 
-      <section className="card">
-        <h2>Model</h2>
+      {/* The controls stay pinned so the parameters and the ratios they move
+          are always on screen together, whatever is scrolled to. */}
+      <section className="card control-bar">
         <Controls
           sigma={sigma}
           setSigma={setSigma}
@@ -107,21 +108,6 @@ export default function App() {
           dither={dither}
           setDither={setDither}
         />
-      </section>
-
-      <section className="card">
-        <h2>Filter</h2>
-        <FilterViz kernel={kernel} sampleRateHz={sampleRateHz} sigma={sigma} />
-      </section>
-
-      <section className="card">
-        <h2>Quantized signal z</h2>
-        <ScrollingView kernel={kernel} sigma={sigma} dither={dither} sigmaY={sigmaY} />
-        <p className="card-note">
-          A window of samples from the model, drawn from a fixed latent noise sequence — changing
-          σ, the filter, or dither transforms the same underlying data, so the trace morphs
-          rather than resampling. Press play to advance through the sequence.
-        </p>
       </section>
 
       <section className="card">
@@ -167,6 +153,21 @@ export default function App() {
           theoretical rate R from the spectral formula in the math section — approximate where
           quantization dominates the spectrum (see the S(f) = 1 threshold on the response plot).
         </p>
+      </section>
+
+      <section className="card">
+        <h2>Quantized signal z</h2>
+        <ScrollingView kernel={kernel} sigma={sigma} dither={dither} sigmaY={sigmaY} />
+        <p className="card-note">
+          A window of samples from the model, drawn from a fixed latent noise sequence — changing
+          σ, the filter, or dither transforms the same underlying data, so the trace morphs
+          rather than resampling. Press play to advance through the sequence.
+        </p>
+      </section>
+
+      <section className="card">
+        <h2>Filter</h2>
+        <FilterViz kernel={kernel} sampleRateHz={sampleRateHz} sigma={sigma} />
       </section>
 
       <section className="card">

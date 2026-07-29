@@ -9,8 +9,8 @@ const CODER_VARS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)']
 const LABEL_W = 96
 const RIGHT_PAD = 64
 const AXIS_H = 26
-const GROUP_H = 22
-const ROW_H = 26
+const GROUP_H = 20
+const ROW_H = 24
 const BAR_H = 16
 
 type Metric = 'bits' | 'ratio'

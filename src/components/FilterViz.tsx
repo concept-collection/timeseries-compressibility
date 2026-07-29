@@ -2,9 +2,10 @@ import { useMemo, useRef, useState } from 'react'
 import { magnitudeResponse } from '../model/filters'
 import { useWidth } from './useWidth'
 
-const MARGIN = { left: 44, right: 12, top: 10, bottom: 26 }
-const HEIGHT = 190
-const DB_FLOOR = -100
+const MARGIN = { left: 44, right: 12, top: 10, bottom: 24 }
+const HEIGHT = 120
+const DB_FLOOR = -80
+const DB_TICKS = [0, -20, -40, -60, -80]
 const RESPONSE_POINTS = 512
 
 interface Tip {
@@ -166,7 +167,7 @@ function ResponsePanel({
     <div className="panel" ref={ref}>
       <h3>Frequency response |H(f)|</h3>
       <svg width={width} height={HEIGHT} onPointerMove={onMove} onPointerLeave={() => setTip(null)}>
-        {[0, -20, -40, -60, -80, -100].map(v => (
+        {DB_TICKS.map(v => (
           <g key={v}>
             <line x1={MARGIN.left} x2={width - MARGIN.right} y1={yOf(v)} y2={yOf(v)} stroke="var(--grid)" strokeWidth={1} />
             <text x={MARGIN.left - 6} y={yOf(v) + 4} textAnchor="end" className="axis-tick">

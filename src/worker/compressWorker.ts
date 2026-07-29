@@ -15,9 +15,7 @@ import {
   DELTA_ZLIB,
   DELTA_ZSTD,
   DELTA_ANS,
-  LPC_ZLIB,
-  LPC_ZSTD,
-  LPC_ANS,
+  lpcCodecs,
   type CodecResult,
 } from '../compress/codecs'
 
@@ -27,6 +25,7 @@ export interface CompressRequest {
   sigma: number
   dither: boolean
   blockSize: number
+  lpcOrder: number
   seed: number
 }
 
@@ -40,12 +39,12 @@ export interface CompressResponse {
   error?: string
 }
 
-const CODECS = [ZLIB, ZSTD, ANS, DELTA_ZLIB, DELTA_ZSTD, DELTA_ANS, LPC_ZLIB, LPC_ZSTD, LPC_ANS]
+const PLAIN_CODECS = [ZLIB, ZSTD, ANS, DELTA_ZLIB, DELTA_ZSTD, DELTA_ANS]
 
 const post = self.postMessage as (message: CompressResponse) => void
 
 self.onmessage = async (e: MessageEvent<CompressRequest>) => {
-  const { id, kernel, sigma, dither, blockSize, seed } = e.data
+  const { id, kernel, sigma, dither, blockSize, lpcOrder, seed } = e.data
   try {
     await initCodecs()
     const samples = new LatentSource(seed).window(0, blockSize, kernel, sigma, dither)
@@ -60,8 +59,8 @@ self.onmessage = async (e: MessageEvent<CompressRequest>) => {
     const bytes = new Uint8Array(samples.buffer, 0, samples.byteLength)
     post({
       id,
-      results: compressAll(bytes, CODECS),
-      bounds: entropyBounds(samples),
+      results: compressAll(bytes, [...PLAIN_CODECS, ...lpcCodecs(lpcOrder)]),
+      bounds: entropyBounds(samples, lpcOrder),
       empiricalStd,
     })
   } catch (err) {

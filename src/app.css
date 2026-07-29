@@ -296,6 +296,30 @@ body {
   color: var(--muted);
 }
 
+.measure-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.measure-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.measure-row select {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--baseline);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font: inherit;
+}
+
 /* ---- compression chart ---- */
 
 .chart-header {

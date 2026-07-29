@@ -70,16 +70,20 @@ function ansSize(
   return encodedSize(encoded) + extraBytes
 }
 
-/** Predictor order. Going past 32 buys well under a percent on this data. */
-const LPC_ORDER = 32
+/** Predictor orders the UI offers; 32 is the FLAC default and ours. */
+export const LPC_ORDERS = [1, 2, 4, 8, 16, 32, 64, 128]
+export const DEFAULT_LPC_ORDER = 32
 
 /** Fit the predictor and take the residual, with the coefficients' cost. */
-function lpcTransform(samples: Int16Array): {
+function lpcTransform(
+  samples: Int16Array,
+  order: number,
+): {
   residual: Int16Array
   restore: (residual: Int16Array) => Int16Array
   extraBytes: number
 } {
-  const model = fitLpc(samples, LPC_ORDER)
+  const model = fitLpc(samples, order)
   if (!model) throw new Error('LPC fit failed')
   return {
     residual: lpcResidual(samples, model),
@@ -124,33 +128,35 @@ export const DELTA_ANS: Codec = {
   size: samples => ansSize(samples, delta(samples), undelta),
 }
 
-const LPC_NOTE = `Order-${LPC_ORDER} linear prediction with integer coefficients; the size includes the coefficients`
-
-export const LPC_ZLIB: Codec = {
-  name: `LPC(${LPC_ORDER}) + zlib -9`,
-  note: `${LPC_NOTE}, then DEFLATE`,
-  size: samples => {
-    const { residual, extraBytes } = lpcTransform(samples)
-    return zlibSync(asBytes(residual), { level: 9 }).length + extraBytes
-  },
-}
-
-export const LPC_ZSTD: Codec = {
-  name: `LPC(${LPC_ORDER}) + zstd -19`,
-  note: `${LPC_NOTE}, then Zstandard 19`,
-  size: samples => {
-    const { residual, extraBytes } = lpcTransform(samples)
-    return zstdCompress(asBytes(residual), 19).length + extraBytes
-  },
-}
-
-export const LPC_ANS: Codec = {
-  name: `LPC(${LPC_ORDER}) + ANS`,
-  note: `${LPC_NOTE}, then the rANS entropy coder`,
-  size: samples => {
-    const { residual, restore, extraBytes } = lpcTransform(samples)
-    return ansSize(samples, residual, restore, extraBytes)
-  },
+/** The three LPC codecs at a given predictor order. */
+export function lpcCodecs(order: number): Codec[] {
+  const note = `Order-${order} linear prediction with integer coefficients; the size includes the coefficients`
+  return [
+    {
+      name: `LPC(${order}) + zlib -9`,
+      note: `${note}, then DEFLATE`,
+      size: samples => {
+        const { residual, extraBytes } = lpcTransform(samples, order)
+        return zlibSync(asBytes(residual), { level: 9 }).length + extraBytes
+      },
+    },
+    {
+      name: `LPC(${order}) + zstd -19`,
+      note: `${note}, then Zstandard 19`,
+      size: samples => {
+        const { residual, extraBytes } = lpcTransform(samples, order)
+        return zstdCompress(asBytes(residual), 19).length + extraBytes
+      },
+    },
+    {
+      name: `LPC(${order}) + ANS`,
+      note: `${note}, then the rANS entropy coder`,
+      size: samples => {
+        const { residual, restore, extraBytes } = lpcTransform(samples, order)
+        return ansSize(samples, residual, restore, extraBytes)
+      },
+    },
+  ]
 }
 
 /** The general-purpose compressors, which know nothing about the data. */
@@ -185,11 +191,15 @@ export interface BoundResult {
 }
 
 /** The order-0 bound for each prefilter: raw samples, delta, LPC residual. */
-export function entropyBounds(samples: Int16Array): BoundResult[] {
+export function entropyBounds(samples: Int16Array, lpcOrder: number): BoundResult[] {
   const streams: { group: string; what: string; data: Int16Array }[] = [
     { group: 'no prefilter', what: 'the samples themselves', data: samples },
     { group: 'delta', what: 'the first differences', data: delta(samples) },
-    { group: 'LPC', what: `the order-${LPC_ORDER} prediction residual`, data: lpcTransform(samples).residual },
+    {
+      group: 'LPC',
+      what: `the order-${lpcOrder} prediction residual`,
+      data: lpcTransform(samples, lpcOrder).residual,
+    },
   ]
   return streams.map(({ group, what, data }) => {
     const bitsPerSample = order0Entropy(data)

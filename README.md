@@ -7,10 +7,14 @@ steps) → FIR filter → optional additive uniform dither on [-½, ½) → roun
 integers. The app shows the filter (convolution kernel and frequency response,
 with cutoffs in Hz against a chosen sample rate), a window of the generated
 integer signal (stationary by default, with a play toggle to let it stream
-endlessly), and the measured compression of a 120,000-sample
-block under nine methods — zlib, zstd, and an rANS entropy coder, each raw,
+endlessly), and the measured compression of a block of the generated integers
+under nine methods — zlib, zstd, and an rANS entropy coder, each raw,
 delta-coded, and LPC-residual-coded — as bits per sample and as ratio against
-raw int16 storage.
+raw int16 storage. The predictor order and the block size are controls, so the
+measurement can be pushed from 10k to a million samples and LPC from order 1
+to 128. Each prefilter group also carries a hollow bar: the order-0 entropy of
+the stream being coded, the limit a per-sample entropy coder cannot beat, which
+ANS misses by 1–2% (its symbol table plus its own arithmetic loss).
 
 Alongside the measurements it plots a theoretical bits/sample R: quantization
 is modeled as an additive white noise floor on the spectrum, the one-step

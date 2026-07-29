@@ -6,11 +6,13 @@ import CompressionChart from './components/CompressionChart'
 import MathSection from './components/MathSection'
 import { DEFAULT_SPEC, clampSpec, designKernel, kernelNorm } from './model/filters'
 import { theoreticalRateBits } from './model/theory'
+import { LATENT_SEED } from './model/latent'
+import { DEFAULT_LPC_ORDER, LPC_ORDERS } from './compress/codecs'
 import type { BoundResult, CodecResult } from './compress/codecs'
 import type { CompressRequest, CompressResponse } from './worker/compressWorker'
 
-const BLOCK_SIZE = 120000
-const BLOCK_SEED = 20260729
+const BLOCK_SIZES = [10000, 20000, 50000, 100000, 200000, 500000, 1000000]
+const DEFAULT_BLOCK_SIZE = 100000
 
 interface CompressionState {
   results: CodecResult[]
@@ -21,7 +23,13 @@ interface CompressionState {
 }
 
 /** The nine codec sizes, measured in a worker on a debounced parameter set. */
-function useCompression(kernel: Float64Array, sigma: number, dither: boolean): CompressionState {
+function useCompression(
+  kernel: Float64Array,
+  sigma: number,
+  dither: boolean,
+  lpcOrder: number,
+  blockSize: number,
+): CompressionState {
   const [state, setState] = useState<CompressionState>({
     results: [],
     bounds: [],
@@ -62,13 +70,16 @@ function useCompression(kernel: Float64Array, sigma: number, dither: boolean): C
         kernel,
         sigma,
         dither,
-        blockSize: BLOCK_SIZE,
-        seed: BLOCK_SEED,
+        blockSize,
+        lpcOrder,
+        // The same seed the signal view draws from, so the block really is
+        // the data on screen.
+        seed: LATENT_SEED,
       }
       workerRef.current?.postMessage(request)
     }, 250)
     return () => clearTimeout(timer)
-  }, [kernel, sigma, dither])
+  }, [kernel, sigma, dither, lpcOrder, blockSize])
 
   return state
 }
@@ -78,6 +89,8 @@ export default function App() {
   const [sampleRateHz, setSampleRateHz] = useState(30000)
   const [spec, setSpec] = useState(DEFAULT_SPEC)
   const [dither, setDither] = useState(false)
+  const [lpcOrder, setLpcOrder] = useState(DEFAULT_LPC_ORDER)
+  const [blockSize, setBlockSize] = useState(DEFAULT_BLOCK_SIZE)
 
   const kernel = useMemo(() => designKernel(spec, sampleRateHz), [spec, sampleRateHz])
   const sigmaY = useMemo(() => {
@@ -85,7 +98,7 @@ export default function App() {
     return dither ? Math.sqrt(filtered * filtered + 1 / 12) : filtered
   }, [kernel, sigma, dither])
   const theoryBits = useMemo(() => theoreticalRateBits(kernel, sigma, dither), [kernel, sigma, dither])
-  const compression = useCompression(kernel, sigma, dither)
+  const compression = useCompression(kernel, sigma, dither, lpcOrder, blockSize)
 
   return (
     <div className="app">
@@ -145,6 +158,30 @@ export default function App() {
             <span className="value">{theoryBits > 0 ? `${(16 / theoryBits).toFixed(2)}×` : '—'}</span>
           </div>
         </div>
+        {/* Settings of the measurement, not of the model — so they live with
+            the chart they change rather than in the model bar. */}
+        <div className="measure-row">
+          <label>
+            LPC order
+            <select value={lpcOrder} onChange={e => setLpcOrder(Number(e.target.value))}>
+              {LPC_ORDERS.map(o => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            block size
+            <select value={blockSize} onChange={e => setBlockSize(Number(e.target.value))}>
+              {BLOCK_SIZES.map(n => (
+                <option key={n} value={n}>
+                  {n.toLocaleString()} samples
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         {compression.error ? (
           <p className="card-note">Compression failed: {compression.error}</p>
         ) : (
@@ -156,7 +193,7 @@ export default function App() {
           />
         )}
         <p className="card-note">
-          Measured on a {BLOCK_SIZE.toLocaleString()}-sample block of the same latent data the
+          Measured on a {blockSize.toLocaleString()}-sample block of the same latent data the
           signal view shows; sizes include everything a decoder needs (ANS symbol table, LPC
           coefficients). Baseline is raw int16 (16 bits/sample). The hollow bar in each group is
           that group's entropy limit — the order-0 entropy of the stream being coded, which no

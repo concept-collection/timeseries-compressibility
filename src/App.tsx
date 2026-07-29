@@ -4,7 +4,7 @@ import FilterViz from './components/FilterViz'
 import ScrollingView from './components/ScrollingView'
 import CompressionChart from './components/CompressionChart'
 import MathSection from './components/MathSection'
-import { DEFAULT_SPEC, designKernel, kernelNorm } from './model/filters'
+import { DEFAULT_SPEC, clampSpec, designKernel, kernelNorm } from './model/filters'
 import { theoreticalRateBits } from './model/theory'
 import type { CodecResult } from './compress/codecs'
 import type { CompressRequest, CompressResponse } from './worker/compressWorker'
@@ -102,7 +102,12 @@ export default function App() {
           sigma={sigma}
           setSigma={setSigma}
           sampleRateHz={sampleRateHz}
-          setSampleRateHz={setSampleRateHz}
+          setSampleRateHz={rate => {
+            // Band edges are absolute, so a new rate can push them past
+            // Nyquist; re-snap the spec so sliders and kernel stay in step.
+            setSampleRateHz(rate)
+            setSpec(s => clampSpec(s, rate))
+          }}
           spec={spec}
           setSpec={setSpec}
           dither={dither}

@@ -1,4 +1,14 @@
-import { FAMILY_LABELS, type FilterFamily, type FilterSpec } from '../model/filters'
+import {
+  FAMILY_LABELS,
+  SIGMA_STOPS,
+  TAP_STOPS,
+  WIDTH_STOPS,
+  frequencyStops,
+  maxCutoffHz,
+  nearestStop,
+  type FilterFamily,
+  type FilterSpec,
+} from '../model/filters'
 
 export interface ControlsProps {
   sigma: number
@@ -12,32 +22,32 @@ export interface ControlsProps {
 }
 
 function formatHz(hz: number): string {
-  return hz >= 1000 ? `${(hz / 1000).toFixed(hz >= 10000 ? 0 : 1)} kHz` : `${Math.round(hz)} Hz`
+  return hz >= 1000 ? `${+(hz / 1000).toFixed(1)} kHz` : `${hz} Hz`
 }
 
-/** A slider that is linear in log10 of its value. */
-function LogSlider(props: {
+/** A slider that moves between the given values rather than a continuum. */
+function StopSlider(props: {
   label: string
+  stops: number[]
   value: number
-  min: number
-  max: number
-  display: string
+  format: (v: number) => string
   onChange: (v: number) => void
 }) {
-  const lo = Math.log10(props.min)
-  const hi = Math.log10(props.max)
+  const { stops } = props
+  const snapped = nearestStop(stops, props.value)
+  const index = stops.indexOf(snapped)
   return (
     <div className="control">
       <label>
-        {props.label} <span className="value">{props.display}</span>
+        {props.label} <span className="value">{props.format(snapped)}</span>
       </label>
       <input
         type="range"
-        min={lo}
-        max={hi}
-        step={(hi - lo) / 400}
-        value={Math.log10(props.value)}
-        onChange={e => props.onChange(10 ** Number(e.target.value))}
+        min={0}
+        max={stops.length - 1}
+        step={1}
+        value={index}
+        onChange={e => props.onChange(stops[Number(e.target.value)])}
       />
     </div>
   )
@@ -45,17 +55,16 @@ function LogSlider(props: {
 
 export default function Controls(p: ControlsProps) {
   const { spec } = p
-  const nyquist = p.sampleRateHz / 2
+  const freqStops = frequencyStops(maxCutoffHz(p.sampleRateHz))
   const sinc = spec.family === 'lowpass' || spec.family === 'bandpass'
   return (
     <div className="controls">
-      <LogSlider
+      <StopSlider
         label="σ (quantization steps)"
+        stops={SIGMA_STOPS}
         value={p.sigma}
-        min={0.1}
-        max={100}
-        display={p.sigma.toPrecision(3)}
-        onChange={v => p.setSigma(Number(v.toPrecision(3)))}
+        format={v => String(v)}
+        onChange={p.setSigma}
       />
       <div className="control">
         <label>filter</label>
@@ -71,53 +80,40 @@ export default function Controls(p: ControlsProps) {
         </select>
       </div>
       {spec.family === 'bandpass' && (
-        <LogSlider
+        <StopSlider
           label="low cutoff"
+          stops={freqStops.filter(f => f < spec.highHz)}
           value={spec.lowHz}
-          min={10}
-          max={nyquist * 0.9}
-          display={formatHz(spec.lowHz)}
-          onChange={v => p.setSpec({ ...spec, lowHz: Math.round(v) })}
+          format={formatHz}
+          onChange={v => p.setSpec({ ...spec, lowHz: v })}
         />
       )}
       {sinc && (
-        <LogSlider
+        <StopSlider
           label={spec.family === 'bandpass' ? 'high cutoff' : 'cutoff'}
+          stops={spec.family === 'bandpass' ? freqStops.filter(f => f > spec.lowHz) : freqStops}
           value={spec.highHz}
-          min={20}
-          max={nyquist * 0.98}
-          display={formatHz(spec.highHz)}
-          onChange={v => p.setSpec({ ...spec, highHz: Math.round(v) })}
+          format={formatHz}
+          onChange={v => p.setSpec({ ...spec, highHz: v })}
         />
       )}
       {sinc && (
-        <div className="control">
-          <label>
-            kernel length <span className="value">{spec.taps} taps</span>
-          </label>
-          <input
-            type="range"
-            min={15}
-            max={201}
-            step={2}
-            value={spec.taps}
-            onChange={e => p.setSpec({ ...spec, taps: Number(e.target.value) })}
-          />
-        </div>
+        <StopSlider
+          label="kernel length"
+          stops={TAP_STOPS}
+          value={spec.taps}
+          format={v => `${v} taps`}
+          onChange={v => p.setSpec({ ...spec, taps: v })}
+        />
       )}
       {spec.family === 'movingAverage' && (
-        <div className="control">
-          <label>
-            width <span className="value">{spec.width} samples</span>
-          </label>
-          <input
-            type="range"
-            min={2}
-            max={64}
-            value={spec.width}
-            onChange={e => p.setSpec({ ...spec, width: Number(e.target.value) })}
-          />
-        </div>
+        <StopSlider
+          label="width"
+          stops={WIDTH_STOPS}
+          value={spec.width}
+          format={v => `${v} samples`}
+          onChange={v => p.setSpec({ ...spec, width: v })}
+        />
       )}
       <div className="control">
         <label>sample rate</label>

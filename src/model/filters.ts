@@ -38,6 +38,48 @@ export const DEFAULT_SPEC: FilterSpec = {
   width: 8,
 }
 
+/**
+ * Every control snaps to a ladder of round values — a slider that stops on
+ * 6 kHz and 101 taps rather than 5847 Hz and 97. σ is the 1-2-5 decade
+ * ladder; frequency adds 3, 4, 6, 8 so the usual band edges are reachable.
+ */
+export const SIGMA_STOPS = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100]
+export const TAP_STOPS = [9, 15, 21, 31, 45, 65, 101, 151, 201, 301]
+export const WIDTH_STOPS = [2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 32, 48, 64]
+
+const FREQ_DECADE = [1, 1.5, 2, 3, 4, 5, 6, 8]
+
+/** Round frequencies from 10 Hz up to `maxHz`. */
+export function frequencyStops(maxHz: number): number[] {
+  const out: number[] = []
+  for (let decade = 10; decade <= 1e5; decade *= 10) {
+    for (const m of FREQ_DECADE) {
+      const v = m * decade
+      if (v <= maxHz) out.push(v)
+    }
+  }
+  return out
+}
+
+/** The stop nearest `v` (in log distance, so relative error is what counts). */
+export function nearestStop(stops: number[], v: number): number {
+  let best = stops[0]
+  let bestErr = Infinity
+  for (const s of stops) {
+    const err = Math.abs(Math.log(s / v))
+    if (err < bestErr) {
+      bestErr = err
+      best = s
+    }
+  }
+  return best
+}
+
+/** The highest band edge the sample rate allows a stop to sit at. */
+export function maxCutoffHz(sampleRateHz: number): number {
+  return sampleRateHz * 0.49
+}
+
 /** Hamming-windowed sinc lowpass with unit DC gain; fc in cycles/sample. */
 function windowedSincLowpass(fc: number, taps: number): Float64Array {
   const n = taps | 1
@@ -55,12 +97,21 @@ function windowedSincLowpass(fc: number, taps: number): Float64Array {
   return h
 }
 
-/** Clamp the spec's band edges into (0, Nyquist) for the given sample rate. */
+/**
+ * Snap the spec onto the control ladders and keep the band edges ordered and
+ * below Nyquist — so what the sliders show is exactly what is designed.
+ */
 export function clampSpec(spec: FilterSpec, sampleRateHz: number): FilterSpec {
-  const nyq = sampleRateHz / 2
-  const highHz = Math.min(Math.max(spec.highHz, 2), nyq * 0.98)
-  const lowHz = Math.min(Math.max(spec.lowHz, 1), highHz * 0.9)
-  return { ...spec, highHz, lowHz }
+  const stops = frequencyStops(maxCutoffHz(sampleRateHz))
+  const highHz = nearestStop(stops, spec.highHz)
+  const below = stops.filter(f => f < highHz)
+  return {
+    ...spec,
+    highHz,
+    lowHz: below.length > 0 ? nearestStop(below, spec.lowHz) : highHz / 2,
+    taps: nearestStop(TAP_STOPS, spec.taps),
+    width: nearestStop(WIDTH_STOPS, spec.width),
+  }
 }
 
 export function designKernel(spec: FilterSpec, sampleRateHz: number): Float64Array {

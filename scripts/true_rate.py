@@ -305,12 +305,13 @@ def main() -> int:
               "The plain sequential filter (docs/mc-true-rate.md §5.3) will likely degenerate "
               "here; reduce --taps for a shallower stopband, or implement the "
               "lookahead/twisted-proposal extension.")
-    print(f"formula (as in the UI): R = {formula:.4f} bits/sample (ratio {16 / formula:.2f}x)"
-          if formula > 0 else f"formula (as in the UI): R = {formula:.4f} bits/sample")
+    print(f"formula (as in the UI): R = {formula:.4f} bits/sample"
+          + (f", ideal ratio {16 / formula:.3f}x vs int16" if formula > 0 else ""))
     if args.filter == "none":
         exact = h_delta(args.sigma) if not args.dither else None
         if exact is not None:
-            print(f"exact truth (iid closed form): R = {exact:.4f} bits/sample")
+            print(f"exact truth (iid closed form): R = {exact:.4f} bits/sample"
+                  + (f", ideal ratio {16 / exact:.3f}x vs int16" if exact > 0 else ""))
 
     print(f"MC (N={args.particles} particles, T={args.steps} steps, burn={args.burn}, "
           f"kmax={args.kmax}, {args.replicates} replicates):")
@@ -319,8 +320,11 @@ def main() -> int:
     except RuntimeError as e:
         print(f"aborted: {e}")
         return 2
-    print(f"MC true rate: R = {mean:.4f} +/- {se:.4f} bits/sample "
-          f"(ratio {16 / mean:.2f}x)" if mean > 0 else f"MC true rate: R = {mean:.4f}")
+    line = f"MC true rate: R = {mean:.4f} +/- {se:.4f} bits/sample"
+    if mean > 0:
+        # First-order error propagation: d(16/R) = 16 dR / R^2.
+        line += f", ideal ratio {16 / mean:.3f}x +/- {16 * se / mean**2:.3f} vs int16"
+    print(line)
     print(f"difference (formula - MC): {formula - mean:+.4f} bits/sample")
     print("note: finite window and inner MC both bias the estimate upward; "
           "double --particles and compare to confirm convergence.")

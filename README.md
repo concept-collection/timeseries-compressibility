@@ -32,7 +32,11 @@ Where the spectrum sits well above one step² this reduces to the classical
 Gaussian entropy rate ½log₂(2πe) + ∫log₂S df; the noise floor keeps it finite
 and positive where a deep stopband would send that integral to −∞. LPC + ANS
 should approach R; probing where the approximation holds is the point. The
-math section is a stub for the full derivation.
+math section is a stub for the full derivation. The formula is *not* exact —
+[docs/mc-true-rate.md](docs/mc-true-rate.md) analyzes its error sources and
+specifies a sequential Monte Carlo estimator of the true entropy rate
+(implementable standalone, e.g. in Python) with a two-sided convergence
+certificate.
 
 ## Run it
 

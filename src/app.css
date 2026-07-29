@@ -351,6 +351,12 @@ body {
   vertical-align: -1px;
 }
 
+/* Hollow: the mark for a limit, matching the outlined bars. */
+.legend .swatch.hollow {
+  background: color-mix(in srgb, var(--muted) 12%, transparent);
+  border: 1.25px solid var(--muted);
+}
+
 .chart-body {
   position: relative;
   transition: opacity 0.15s;
@@ -384,6 +390,13 @@ body {
   fill: var(--ink-2);
   font-size: 11.5px;
   font-variant-numeric: tabular-nums;
+}
+
+/* Limit rows read one step quieter than the measured ones. */
+.bar-row-label.bound,
+.bar-value.bound {
+  fill: var(--muted);
+  font-style: italic;
 }
 
 .axis-tick {

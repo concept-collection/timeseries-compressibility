@@ -7,6 +7,8 @@ import { LatentSource } from '../model/latent'
 import {
   initCodecs,
   compressAll,
+  entropyBounds,
+  type BoundResult,
   ZLIB,
   ZSTD,
   ANS,
@@ -31,6 +33,8 @@ export interface CompressRequest {
 export interface CompressResponse {
   id: number
   results: CodecResult[]
+  /** Order-0 entropy limit for each prefilter group. */
+  bounds: BoundResult[]
   /** Empirical std of the quantized block, for display sanity. */
   empiricalStd: number
   error?: string
@@ -54,8 +58,13 @@ self.onmessage = async (e: MessageEvent<CompressRequest>) => {
     const mean = sum / samples.length
     const empiricalStd = Math.sqrt(Math.max(0, sumSq / samples.length - mean * mean))
     const bytes = new Uint8Array(samples.buffer, 0, samples.byteLength)
-    post({ id, results: compressAll(bytes, CODECS), empiricalStd })
+    post({
+      id,
+      results: compressAll(bytes, CODECS),
+      bounds: entropyBounds(samples),
+      empiricalStd,
+    })
   } catch (err) {
-    post({ id, results: [], empiricalStd: 0, error: String(err) })
+    post({ id, results: [], bounds: [], empiricalStd: 0, error: String(err) })
   }
 }

@@ -6,7 +6,7 @@ import CompressionChart from './components/CompressionChart'
 import MathSection from './components/MathSection'
 import { DEFAULT_SPEC, clampSpec, designKernel, kernelNorm } from './model/filters'
 import { theoreticalRateBits } from './model/theory'
-import type { CodecResult } from './compress/codecs'
+import type { BoundResult, CodecResult } from './compress/codecs'
 import type { CompressRequest, CompressResponse } from './worker/compressWorker'
 
 const BLOCK_SIZE = 120000
@@ -14,6 +14,7 @@ const BLOCK_SEED = 20260729
 
 interface CompressionState {
   results: CodecResult[]
+  bounds: BoundResult[]
   empiricalStd: number
   computing: boolean
   error: string | null
@@ -23,6 +24,7 @@ interface CompressionState {
 function useCompression(kernel: Float64Array, sigma: number, dither: boolean): CompressionState {
   const [state, setState] = useState<CompressionState>({
     results: [],
+    bounds: [],
     empiricalStd: 0,
     computing: true,
     error: null,
@@ -38,6 +40,7 @@ function useCompression(kernel: Float64Array, sigma: number, dither: boolean): C
       if (e.data.id !== idRef.current) return
       setState({
         results: e.data.error ? [] : e.data.results,
+        bounds: e.data.error ? [] : e.data.bounds,
         empiricalStd: e.data.empiricalStd,
         computing: false,
         error: e.data.error ?? null,
@@ -147,6 +150,7 @@ export default function App() {
         ) : (
           <CompressionChart
             results={compression.results}
+            bounds={compression.bounds}
             theoryBits={theoryBits}
             computing={compression.computing}
           />
@@ -154,9 +158,12 @@ export default function App() {
         <p className="card-note">
           Measured on a {BLOCK_SIZE.toLocaleString()}-sample block of the same latent data the
           signal view shows; sizes include everything a decoder needs (ANS symbol table, LPC
-          coefficients). Baseline is raw int16 (16 bits/sample). The dashed line is the
-          theoretical rate R from the spectral formula in the math section — approximate where
-          quantization dominates the spectrum (see the S(f) = 1 threshold on the response plot).
+          coefficients). Baseline is raw int16 (16 bits/sample). The hollow bar in each group is
+          that group's entropy limit — the order-0 entropy of the stream being coded, which no
+          per-sample entropy coder can beat and ANS falls short of by its symbol table plus its
+          own arithmetic loss. The dashed line is the theoretical rate R from the spectral
+          formula in the math section — approximate where quantization dominates the spectrum
+          (see the S(f) = 1 threshold on the response plot).
         </p>
       </section>
 

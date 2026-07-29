@@ -156,6 +156,53 @@ export const LPC_ANS: Codec = {
 /** The general-purpose compressors, which know nothing about the data. */
 export const GENERAL_CODECS: Codec[] = [ZLIB, ZSTD]
 
+/**
+ * Order-0 (memoryless) entropy of an int16 stream, in bits per sample: what a
+ * perfect entropy coder for the sample histogram would spend, with nothing
+ * charged for describing that histogram. The ANS bars sit above this by the
+ * symbol table plus the coder's own arithmetic loss.
+ */
+export function order0Entropy(samples: Int16Array): number {
+  const counts = new Int32Array(65536)
+  for (let i = 0; i < samples.length; i++) counts[samples[i] + 32768]++
+  let bits = 0
+  for (const c of counts) {
+    if (c > 0) {
+      const p = c / samples.length
+      bits -= p * Math.log2(p)
+    }
+  }
+  return bits
+}
+
+export interface BoundResult {
+  /** The prefilter group this bounds, matching the codec groups. */
+  group: string
+  note: string
+  bitsPerSample: number
+  ratio: number
+  bytes: number
+}
+
+/** The order-0 bound for each prefilter: raw samples, delta, LPC residual. */
+export function entropyBounds(samples: Int16Array): BoundResult[] {
+  const streams: { group: string; what: string; data: Int16Array }[] = [
+    { group: 'no prefilter', what: 'the samples themselves', data: samples },
+    { group: 'delta', what: 'the first differences', data: delta(samples) },
+    { group: 'LPC', what: `the order-${LPC_ORDER} prediction residual`, data: lpcTransform(samples).residual },
+  ]
+  return streams.map(({ group, what, data }) => {
+    const bitsPerSample = order0Entropy(data)
+    return {
+      group,
+      note: `order-0 entropy of ${what} — the limit for a per-sample entropy coder, with no symbol table or coefficients charged`,
+      bitsPerSample,
+      ratio: 16 / bitsPerSample,
+      bytes: Math.ceil((bitsPerSample * samples.length) / 8),
+    }
+  })
+}
+
 let ready: Promise<void> | null = null
 
 // zstd-wasm publishes the *node* build's types while the bundler resolves the

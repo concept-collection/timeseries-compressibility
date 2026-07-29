@@ -1,42 +1,85 @@
 import { useMemo } from 'react'
 import katex from 'katex'
 
-function Display({ tex }: { tex: string }) {
-  const html = useMemo(() => katex.renderToString(tex, { displayMode: true, throwOnError: false }), [tex])
-  return <div dangerouslySetInnerHTML={{ __html: html }} />
+function Tex({ tex, display }: { tex: string; display?: boolean }) {
+  const html = useMemo(
+    () => katex.renderToString(tex, { displayMode: !!display, throwOnError: false }),
+    [tex, display],
+  )
+  return <span dangerouslySetInnerHTML={{ __html: html }} />
+}
+
+/** One term of the formula: the symbol, then what it is. */
+function Def({ tex, children }: { tex: string; children: React.ReactNode }) {
+  return (
+    <>
+      <dt>
+        <Tex tex={tex} />
+      </dt>
+      <dd>{children}</dd>
+    </>
+  )
 }
 
 /**
- * Stub for the full derivation. It states the model and the formula the app
- * plots; the reasoning connecting them is to come.
+ * The theoretical rate R exactly as `model/theory.ts` computes it, with every
+ * symbol defined. The derivation that justifies it is still to be written.
  */
 export default function MathSection() {
   return (
     <div className="math-section">
       <p>
-        The generating model: i.i.d. Gaussian noise, a FIR filter h, optional uniform dither, and
-        rounding to the integer quantization grid (the step is the unit, so σ is measured in
-        steps):
+        The dashed line on the compression chart is R, the predicted bits per sample. It is
+        computed in three steps: the spectrum of the stored signal, the residual an ideal
+        predictor leaves, and the entropy of that residual on the integer grid.
       </p>
-      <Display tex="x_n \sim \mathcal{N}(0,\sigma^2)\ \text{i.i.d.}, \qquad y = h * x, \qquad z_n = \operatorname{round}(y_n + d_n), \quad d_n \sim \mathcal{U}[-\tfrac12,\tfrac12)\ \text{or}\ 0" />
-      <p>
-        The reference rate R treats the roundoff as an additive white noise floor on the spectrum
-        — σ<sub>q</sub>² = 1/12 without dither, 1/6 with it (the dither is stored in the
-        integers) — takes the one-step Wiener prediction error of the resulting process
-        (Szegő–Kolmogorov), and charges the exact entropy of that innovation quantized at unit
-        step:
-      </p>
-      <Display tex="S_z(f) = \sigma^2\,|H(f)|^2 + \sigma_q^2, \qquad \sigma_e^2 = \exp\!\Big(2\!\int_0^{1/2}\!\ln S_z(f)\,df\Big), \qquad R = H_{\Delta}(\sigma_e)" />
-      <Display tex="H_{\Delta}(s) = -\sum_{z\in\mathbb{Z}} p_z \log_2 p_z, \qquad p_z = \Phi\!\Big(\tfrac{z+\frac12}{s}\Big) - \Phi\!\Big(\tfrac{z-\frac12}{s}\Big)" />
-      <p>
-        with f in cycles per sample. In the fine-quantization regime (S ≫ 1 everywhere) this
-        reduces to the classical Gaussian entropy rate ½ log₂(2πe) + ∫ log₂ S(f) df — and with
-        no filter, to ½ log₂(2πe σ²). The noise floor keeps R finite and positive where a deep
-        stopband pushes S(f) below one step², which is where the classical formula diverges to
-        −∞. It is still an approximation: roundoff is not truly white, independent, or Gaussian,
-        prediction is from the quantized past, and everything degrades when the whole signal
-        hides inside the dead zone (σ_y ≪ 1). Quantifying that gap — and why LPC + ANS is the
-        right yardstick — is the subject of the full derivation, still to be written.
+
+      <Tex display tex="S_z(f) \;=\; \sigma^2\,\big|H(f)\big|^2 \;+\; \sigma_q^2, \qquad H(f) \;=\; \sum_{n=0}^{L-1} h_n\, e^{-2\pi i f n}" />
+      <Tex display tex="\sigma_e \;=\; 2^{\,\int_0^{1/2} \log_2 S_z(f)\,df}" />
+      <Tex display tex="R \;=\; -\sum_{z \in \mathbb{Z}} p_z \log_2 p_z, \qquad p_z \;=\; \Phi\!\left(\frac{z + \tfrac12}{\sigma_e}\right) - \Phi\!\left(\frac{z - \tfrac12}{\sigma_e}\right)" />
+
+      <dl className="defs">
+        <Def tex="\sigma">
+          standard deviation of the i.i.d. Gaussian input, in quantization steps (the step is the
+          unit, so rounding is to the nearest integer)
+        </Def>
+        <Def tex="h_0,\dots,h_{L-1}">
+          the FIR kernel the input is convolved with — the taps drawn in the kernel plot, L of
+          them
+        </Def>
+        <Def tex="H(f)">
+          the kernel's frequency response, the quantity plotted in dB as |H(f)|
+        </Def>
+        <Def tex="f">
+          frequency in cycles per sample, running from 0 to ½ (Nyquist); the plots label the same
+          axis in Hz, as f times the sample rate
+        </Def>
+        <Def tex="\sigma_q^2">
+          variance charged to rounding, treated as additive white noise: 1/12 for the roundoff
+          alone, 1/6 when dither is on (the dither is stored in the integers, so its 1/12 adds)
+        </Def>
+        <Def tex="S_z(f)">
+          power spectrum of the stored integer signal, in steps² per unit frequency
+        </Def>
+        <Def tex="\sigma_e">
+          standard deviation of the innovation — what an ideal linear predictor still cannot
+          predict from all earlier samples. The exponent is the Szegő–Kolmogorov formula for the
+          one-step prediction error, the geometric mean of the spectrum.
+        </Def>
+        <Def tex="\Phi">standard normal cumulative distribution function</Def>
+        <Def tex="p_z">
+          probability that the innovation, rounded to the integer grid, lands on z
+        </Def>
+        <Def tex="R">
+          bits per sample; the compression ratio the chart marks is 16/R, against 16-bit integer
+          storage
+        </Def>
+      </dl>
+
+      <p className="card-note">
+        The integral is evaluated by the midpoint rule on 8192 points and the sum over z is taken
+        out to where the remaining mass is negligible. A derivation — and an account of where
+        modeling the roundoff as white noise stops being fair — is still to be written.
       </p>
     </div>
   )

@@ -434,5 +434,23 @@ body {
 }
 
 .math-section .katex-display {
-  margin: 12px 0;
+  margin: 14px 0;
+}
+
+.defs {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 18px;
+  margin: 18px 0 0;
+  max-width: 76ch;
+}
+
+.defs dt {
+  text-align: right;
+  color: var(--ink);
+}
+
+.defs dd {
+  margin: 0;
+  color: var(--ink-2);
 }

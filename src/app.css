@@ -463,6 +463,49 @@ body {
   font-weight: 500;
 }
 
+/* ---- MC cross-check command ---- */
+
+.cli-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  min-width: 0;
+}
+
+.cli-label {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.cli-row code {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  color: var(--ink-2);
+  background: color-mix(in srgb, var(--grid) 45%, transparent);
+  border-radius: 6px;
+  padding: 4px 8px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.copy-btn {
+  background: var(--surface);
+  color: var(--ink-2);
+  border: 1px solid var(--baseline);
+  border-radius: 6px;
+  padding: 3px 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.copy-btn:hover {
+  color: var(--ink);
+}
+
 /* ---- math ---- */
 
 .math-section p {

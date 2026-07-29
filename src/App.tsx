@@ -4,6 +4,7 @@ import FilterViz from './components/FilterViz'
 import ScrollingView from './components/ScrollingView'
 import CompressionChart from './components/CompressionChart'
 import MathSection from './components/MathSection'
+import TrueRateCommand from './components/TrueRateCommand'
 import { DEFAULT_SPEC, clampSpec, designKernel, kernelNorm } from './model/filters'
 import { theoreticalRateBits } from './model/theory'
 import { LATENT_SEED } from './model/latent'
@@ -202,6 +203,7 @@ export default function App() {
           formula in the math section — approximate where quantization dominates the spectrum
           (see the S(f) = 1 threshold on the response plot).
         </p>
+        <TrueRateCommand sigma={sigma} spec={spec} sampleRateHz={sampleRateHz} dither={dither} />
       </section>
 
       <section className="card">

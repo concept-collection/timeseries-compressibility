@@ -14,6 +14,24 @@ No code from the app needs to be reused; everything required is specified
 here. Reference values measured with the app are given in §7 for
 cross-checking.
 
+**Implementation status.** A reference implementation exists at
+[`scripts/true_rate.py`](../scripts/true_rate.py) (`--selftest` runs §6's
+cheap tests; the UI shows the ready-to-run command for its current
+parameters). It validates on `none` (matches the closed form),
+`first-difference`, `moving-average`, and windowed-sinc kernels up to ~21
+taps. For longer windowed-sinc kernels the innovation std falls to a few
+hundredths of a step and the plain sequential filter hits the §5.3
+genealogical collapse — the script detects this and aborts rather than
+reporting garbage. Extending to that regime needs lookahead/twisted
+proposals (Guarniero, Johansen & Lee, "The iterated auxiliary particle
+filter", JASA 2017) or exact-HMC rejuvenation for truncated Gaussians
+(Pakman & Paninski 2014); single-site Gibbs rejuvenation is *not* a viable
+substitute here because the near-deterministic dynamics make its
+conditionals microscopically narrow. Early healthy-regime results: the
+closed-form R overestimates the MC truth by ≈ 0.07–0.10 bits/sample at
+σ = 5 for MA(8) and the 21-tap bandpass — consistent with §1.3's error
+analysis.
+
 ---
 
 ## 1. The system under study

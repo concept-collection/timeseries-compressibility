@@ -76,9 +76,17 @@ def design_kernel(args):
 # ------------------------------------------------- the app's formula for R
 # Ported from src/model/theory.ts. Phi via math.erf (machine precision).
 
+TWO_PI_E = 2 * math.pi * math.e
+
+
 def quantized_gaussian_entropy(s):
     if s <= 0.02:
         return 0.0
+    # The discrete entropy approaches 1/2 log2(2 pi e s^2) from above like
+    # log2(e)/(24 s^2) (the delta^2/24 Fisher-information correction); at
+    # s >= 6 the corrected asymptote is within 2e-6 bits.
+    if s >= 6:
+        return 0.5 * math.log2(TWO_PI_E * s * s) + math.log2(math.e) / (24 * s * s)
     zmax = int(math.ceil(8 * s + 4))
     H = 0.0
     prev = 0.5 * (1 + math.erf((-zmax - 0.5) / (s * math.sqrt(2))))
@@ -91,13 +99,42 @@ def quantized_gaussian_entropy(s):
     return H
 
 
-def formula_rate(kernel, sigma, dither, points=8192):
-    noise_var = 1 / 6 if dither else 1 / 12
+def dithered_quantized_gaussian_entropy(s):
+    """Exact entropy of round(N(0, s^2) + U[-1/2, 1/2)) — the marginal of a
+    stored sample with dither on. The pmf has the closed form
+    p_j = s * (G((j+1)/s) - 2 G(j/s) + G((j-1)/s)) with G(t) = t Phi(t) + phi(t)
+    the antiderivative of Phi; machine-exact at every s via math.erf."""
+    if s <= 0:
+        return 0.0
+
+    def G(t):
+        return t * 0.5 * (1 + math.erf(t / math.sqrt(2))) + math.exp(-0.5 * t * t) / SQRT2PI
+
+    jmax = int(math.ceil(8 * s + 2))
+    H = 0.0
+    for j in range(-jmax, jmax + 1):
+        p = s * (G((j + 1) / s) - 2 * G(j / s) + G((j - 1) / s))
+        if p > 0:
+            H -= p * math.log2(p)
+    return H
+
+
+def formula_rates(kernel, sigma, dither, points=8192):
+    """The app's R = min(Rspec, Rsamp). Rspec charges the rounding(+dither)
+    noise at its full variance nu per Fourier mode; Rsamp is the exact
+    marginal entropy of one stored sample, a subadditivity upper bound that
+    takes over when the whole process is sub-threshold. Midpoint grid on
+    [0, 1/2]; |H| is symmetric, so the grid mean equals the unit-circle
+    integral. Returns (rspec, rsamp)."""
+    nu = 1 / 6 if dither else 1 / 12
     f = (0.5 * (np.arange(points) + 0.5)) / points
     w = -2j * np.pi * np.outer(f, np.arange(len(kernel)))
     S = sigma * sigma * np.abs(np.exp(w) @ kernel) ** 2
-    integral = float(np.log2(S + noise_var).mean()) * 0.5
-    return quantized_gaussian_entropy(2.0 ** integral)
+    rspec = float(np.mean(0.5 * np.log2(TWO_PI_E * (S + nu))))
+    v = sigma * sigma * float(np.sum(np.asarray(kernel) ** 2))
+    rsamp = (dithered_quantized_gaussian_entropy(math.sqrt(v)) if dither
+             else quantized_gaussian_entropy(math.sqrt(v)))
+    return rspec, rsamp
 
 
 # ------------------------------------------------ vectorized normal helpers
@@ -290,10 +327,11 @@ def main():
     L = len(kernel)
     M = args.past if args.past is not None else max(512, 4 * L)
 
-    R = formula_rate(kernel, args.sigma, args.dither)
+    R_spec, R_samp = formula_rates(kernel, args.sigma, args.dither)
+    R = min(R_spec, R_samp)
     print(f'model: sigma={args.sigma} filter={args.filter} L={L} dither={args.dither}')
-    print(f'formula R (as shown in the app): {R:.4f} bits/sample'
-          f'  (ratio vs int16: {16 / R:.3f}x)' if R > 0 else f'formula R: {R:.4f} bits/sample')
+    ratio = f'  (ratio vs int16: {16 / R:.3f}x)' if R > 0 else ''
+    print(f'formula R = min(spec {R_spec:.4f}, samp {R_samp:.4f}) = {R:.4f} bits/sample{ratio}')
     print(f'MC: {args.pasts} pasts x {args.sweeps} sweeps, conditioning on M={M} samples')
 
     rng = np.random.default_rng(args.seed)
@@ -309,7 +347,8 @@ def main():
     se = float(np.std(Hs, ddof=1) / math.sqrt(len(Hs)))
     print(f'\nMC entropy rate: {mean:.4f} +/- {se:.4f} bits/sample'
           f'  (ratio vs int16: {16 / mean:.3f}x)')
-    print(f'formula R:       {R:.4f} bits/sample   (formula - MC = {R - mean:+.4f})')
+    print(f'formula R:       {R:.4f} bits/sample   (formula - MC = {R - mean:+.4f}; '
+          f'spec {R_spec:.4f}, samp {R_samp:.4f})')
     print('note: the MC value estimates H(z_next | M past samples), an upper bound '
           'on the rate that tightens as --past grows.')
 

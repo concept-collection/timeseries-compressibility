@@ -507,6 +507,15 @@ body {
   max-width: 76ch;
 }
 
+.math-section h3 {
+  font-size: 12px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-2);
+  margin: 26px 0 10px;
+}
+
 .math-section .katex-display {
   margin: 14px 0;
 }

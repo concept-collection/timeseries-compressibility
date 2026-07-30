@@ -16,23 +16,28 @@ to 128. Each prefilter group also carries a hollow bar: the order-0 entropy of
 the stream being coded, the limit a per-sample entropy coder cannot beat, which
 ANS misses by 1–2% (its symbol table plus its own arithmetic loss).
 
-Alongside the measurements it plots a theoretical bits/sample R: quantization
-is modeled as an additive white noise floor on the spectrum, the one-step
-Wiener prediction error of the resulting process comes from the
-Szegő–Kolmogorov formula, and R is the exact entropy of that innovation
-quantized at unit step:
+Alongside the measurements it plots a theoretical bits/sample R — the smaller
+of a spectral estimate and a rigorous one-sample ceiling:
 
 ```
-S_z(f) = σ²|H(f)|² + σ_q²         σ_q² = 1/12 (1/6 with dither)
-σ_e²   = exp( 2 ∫₀^½ ln S_z(f) df )
-R      = H_Δ(σ_e)                 (exact quantized-Gaussian entropy)
+R     = min(Rspec, Rsamp)
+Rspec = ∫₀¹ ½ log₂( 2πe (S(f) + ν) ) df    S(f) = σ²|H(f)|², ν = 1/12 (1/6 dithered)
+Rsamp = H( round(N(0, v) [+ U(-½,½) with dither]) )    v = σ² Σ h²
 ```
 
-Where the spectrum sits well above one step² this reduces to the classical
-Gaussian entropy rate ½log₂(2πe) + ∫log₂S df; the noise floor keeps it finite
-and positive where a deep stopband would send that integral to −∞. LPC + ANS
-should approach R; probing where the approximation holds is the point. The
-math section is a stub for the full derivation.
+Rspec is the Zamir–Feder rate of the dithered quantizer counted per Fourier
+mode: the signal modes are independent Gaussians of variance S(f), and the
+i.i.d. roundoff(+dither) noise is Gaussianized per mode by the CLT, so it
+enters at its full variance ν — not at the entropy power 1/(2πe) an aligned
+scalar quantizer would charge (the lattice lives in the sample basis; a dead
+band inside a live process costs ≈0.25 bits/mode, not zero). At high SNR it
+reduces to the Kolmogorov rate ½log₂(2πe σ²) + ∫log₂|H| df. Where the whole
+process sits below the quantization step, Rspec bottoms out while the true
+rate collapses; subadditivity H(z) ≤ Σ H(zₙ) makes Rsamp — the exact marginal
+entropy of one stored sample — a true upper bound with the right collapse,
+and the min selects it exactly there. Monte-Carlo puts R within ~0.01–0.02
+bits/sample for v ≳ 0.25 (worst ~+0.03 at the branch crossover). LPC + ANS
+should approach R; probing where the approximation holds is the point.
 
 ## Run it
 

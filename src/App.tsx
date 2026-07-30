@@ -229,9 +229,11 @@ export default function App() {
           coefficients). Baseline is raw int16 (16 bits/sample). The hollow bar in each group is
           that group's entropy limit — the order-0 entropy of the stream being coded, which no
           per-sample entropy coder can beat and ANS falls short of by its symbol table plus its
-          own arithmetic loss. The dashed line is the theoretical rate R from the spectral
-          formula in the math section — approximate where quantization dominates the spectrum
-          (see the S(f) = 1 threshold on the response plot).
+          own arithmetic loss. The dashed line is the theoretical rate R from the math section —
+          a spectral estimate with the rounding charged at its full variance, capped by the
+          exact one-sample entropy when the whole process sits below the quantization step
+          (see the S(f) = 1 threshold on the response plot); it is least certain at the
+          crossover between those two regimes.
         </p>
         <CopyableCommand
           label="check R against a Monte-Carlo ground truth (runs locally, ~2 min):"

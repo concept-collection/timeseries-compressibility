@@ -4,9 +4,8 @@ import Controls from './components/Controls'
 import FilterViz from './components/FilterViz'
 import ScrollingView from './components/ScrollingView'
 import CompressionChart from './components/CompressionChart'
-import MathSection from './components/MathSection'
+import MethodNote from './components/MethodNote'
 import { DEFAULT_SPEC, clampSpec, designKernel, kernelNorm } from './model/filters'
-import { theoreticalRateBits } from './model/theory'
 import { LATENT_SEED } from './model/latent'
 import { DEFAULT_LPC_ORDER, LPC_ORDERS } from './compress/codecs'
 import type { BoundResult, CodecResult } from './compress/codecs'
@@ -27,7 +26,6 @@ interface CompressionState {
 function useCompression(
   kernel: Float64Array,
   sigma: number,
-  dither: boolean,
   lpcOrder: number,
   blockSize: number,
 ): CompressionState {
@@ -70,7 +68,6 @@ function useCompression(
         id,
         kernel,
         sigma,
-        dither,
         blockSize,
         lpcOrder,
         // The same seed the signal view draws from, so the block really is
@@ -80,14 +77,22 @@ function useCompression(
       workerRef.current?.postMessage(request)
     }, 250)
     return () => clearTimeout(timer)
-  }, [kernel, sigma, dither, lpcOrder, blockSize])
+  }, [kernel, sigma, lpcOrder, blockSize])
 
   return state
 }
 
-/** The terminal command for scripts/true_rate.py at the current settings. */
-function mcCommand(sigma: number, spec: ReturnType<typeof clampSpec>, rate: number, dither: boolean): string {
-  const parts = ['python scripts/true_rate.py', `--sigma ${sigma}`]
+/**
+ * The terminal command that estimates the reference rate R at the current
+ * settings, using the unbiased Monte-Carlo estimator from the companion
+ * timeseries-entropy package.
+ */
+function mcCommand(sigma: number, spec: ReturnType<typeof clampSpec>, rate: number): string {
+  const parts = [
+    'uvx --from git+https://github.com/concept-collection/timeseries-entropy',
+    'timeseries-entropy',
+    `--sigma ${sigma}`,
+  ]
   switch (spec.family) {
     case 'none':
       parts.push('--filter none')
@@ -111,7 +116,6 @@ function mcCommand(sigma: number, spec: ReturnType<typeof clampSpec>, rate: numb
       parts.push('--filter first-difference')
       break
   }
-  if (dither) parts.push('--dither')
   return parts.join(' ')
 }
 
@@ -119,26 +123,21 @@ export default function App() {
   const [sigma, setSigma] = useState(5)
   const [sampleRateHz, setSampleRateHz] = useState(30000)
   const [spec, setSpec] = useState(DEFAULT_SPEC)
-  const [dither, setDither] = useState(false)
   const [lpcOrder, setLpcOrder] = useState(DEFAULT_LPC_ORDER)
   const [blockSize, setBlockSize] = useState(DEFAULT_BLOCK_SIZE)
 
   const kernel = useMemo(() => designKernel(spec, sampleRateHz), [spec, sampleRateHz])
-  const sigmaY = useMemo(() => {
-    const filtered = sigma * kernelNorm(kernel)
-    return dither ? Math.sqrt(filtered * filtered + 1 / 12) : filtered
-  }, [kernel, sigma, dither])
-  const theoryBits = useMemo(() => theoreticalRateBits(kernel, sigma, dither), [kernel, sigma, dither])
-  const compression = useCompression(kernel, sigma, dither, lpcOrder, blockSize)
+  const sigmaY = useMemo(() => sigma * kernelNorm(kernel), [kernel, sigma])
+  const compression = useCompression(kernel, sigma, lpcOrder, blockSize)
 
   return (
     <div className="app">
       <header className="app-header">
         <h1>Time-series compressibility</h1>
         <p>
-          Gaussian noise → FIR filter → optional dither → round to integers. How well can the
-          integer stream be losslessly compressed, and does the spectral entropy-rate formula
-          predict the limit?
+          Gaussian noise → FIR filter → round to integers. How well can the integer stream be
+          losslessly compressed, and how close do practical codecs get to the entropy rate of
+          the process?
         </p>
       </header>
 
@@ -157,8 +156,6 @@ export default function App() {
           }}
           spec={spec}
           setSpec={setSpec}
-          dither={dither}
-          setDither={setDither}
         />
       </section>
 
@@ -178,15 +175,13 @@ export default function App() {
               <small>steps</small>
             </span>
           </div>
+          {/* Placeholder: R will be estimated in the browser by the unbiased
+              estimator; until then the command below produces it locally. */}
           <div className="stat">
-            <span className="label">theoretical rate R</span>
+            <span className="label">reference rate R</span>
             <span className="value">
-              {theoryBits.toFixed(2)} <small>bits/sample</small>
+              — <small>bits/sample</small>
             </span>
-          </div>
-          <div className="stat">
-            <span className="label">implied best ratio</span>
-            <span className="value">{theoryBits > 0 ? `${(16 / theoryBits).toFixed(2)}×` : '—'}</span>
           </div>
         </div>
         {/* Settings of the measurement, not of the model — so they live with
@@ -219,7 +214,6 @@ export default function App() {
           <CompressionChart
             results={compression.results}
             bounds={compression.bounds}
-            theoryBits={theoryBits}
             computing={compression.computing}
           />
         )}
@@ -229,36 +223,34 @@ export default function App() {
           coefficients). Baseline is raw int16 (16 bits/sample). The hollow bar in each group is
           that group's entropy limit — the order-0 entropy of the stream being coded, which no
           per-sample entropy coder can beat and ANS falls short of by its symbol table plus its
-          own arithmetic loss. The dashed line is the theoretical rate R from the math section —
-          a spectral estimate with the rounding charged at its full variance, capped by the
-          exact one-sample entropy when the whole process sits below the quantization step
-          (see the S(f) = 1 threshold on the response plot); it is least certain at the
-          crossover between those two regimes.
+          own arithmetic loss. The reference rate R — the entropy rate of the process itself,
+          the limit no lossless method can beat — is not yet computed in the browser; the
+          command below estimates it locally (see the method section at the bottom).
         </p>
         <CopyableCommand
-          label="check R against a Monte-Carlo ground truth (runs locally, ~2 min):"
-          command={mcCommand(sigma, spec, sampleRateHz, dither)}
+          label="reference rate R by unbiased Monte-Carlo (runs locally):"
+          command={mcCommand(sigma, spec, sampleRateHz)}
         />
       </section>
 
       <section className="card">
         <h2>Quantized signal z</h2>
-        <ScrollingView kernel={kernel} sigma={sigma} dither={dither} sigmaY={sigmaY} />
+        <ScrollingView kernel={kernel} sigma={sigma} sigmaY={sigmaY} />
         <p className="card-note">
           A window of samples from the model, drawn from a fixed latent noise sequence — changing
-          σ, the filter, or dither transforms the same underlying data, so the trace morphs
-          rather than resampling. Press play to advance through the sequence.
+          σ or the filter transforms the same underlying data, so the trace morphs rather than
+          resampling. Press play to advance through the sequence.
         </p>
       </section>
 
       <section className="card">
         <h2>Filter</h2>
-        <FilterViz kernel={kernel} sampleRateHz={sampleRateHz} sigma={sigma} />
+        <FilterViz kernel={kernel} sampleRateHz={sampleRateHz} />
       </section>
 
       <section className="card">
-        <h2>The math</h2>
-        <MathSection />
+        <h2>The reference rate</h2>
+        <MethodNote />
       </section>
     </div>
   )

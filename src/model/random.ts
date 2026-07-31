@@ -21,11 +21,6 @@ export class GaussianStream {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
 
-  /** Uniform on [-1/2, 1/2), for dither. */
-  uniformCentered(): number {
-    return this.uniform() - 0.5
-  }
-
   /** Standard normal. */
   normal(): number {
     if (this.spare !== null) {

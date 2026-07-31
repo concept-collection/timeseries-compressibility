@@ -23,7 +23,6 @@ function niceStep(span: number): number {
 export default function ScrollingView(props: {
   kernel: Float64Array
   sigma: number
-  dither: boolean
   /** Predicted std of the quantized signal, for a stable y-scale. */
   sigmaY: number
 }) {
@@ -84,7 +83,7 @@ export default function ScrollingView(props: {
       // The window ends at posRef and never reaches before index 0, so the
       // first thing shown is the start of the compression block.
       if (posRef.current < visible) posRef.current = visible
-      const win = latent.window(posRef.current - visible, visible, props.kernel, props.sigma, props.dither)
+      const win = latent.window(posRef.current - visible, visible, props.kernel, props.sigma)
 
       const surface = styles.getPropertyValue('--surface')
       ctx.fillStyle = surface
@@ -140,7 +139,7 @@ export default function ScrollingView(props: {
       cancelAnimationFrame(raf)
       scheme.removeEventListener('change', refreshStyles)
     }
-  }, [props.kernel, props.sigma, props.dither, props.sigmaY])
+  }, [props.kernel, props.sigma, props.sigmaY])
 
   return (
     <div className="scroll-wrap">

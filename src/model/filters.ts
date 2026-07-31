@@ -2,10 +2,10 @@
  * FIR filter presets and their frequency response.
  *
  * The filter is always realized as an explicit convolution kernel, so the
- * pipeline is exactly x → h*x → (+dither) → round, and the theory can work
- * from |H(f)| of the same taps the data actually went through. Cutoffs are
- * given in Hz against a user-set sample rate; internally everything is in
- * normalized frequency (cycles/sample, Nyquist = 0.5).
+ * pipeline is exactly x → h*x → round, and the |H(f)| plotted is the response
+ * of the same taps the data actually went through. Cutoffs are given in Hz
+ * against a user-set sample rate; internally everything is in normalized
+ * frequency (cycles/sample, Nyquist = 0.5).
  */
 
 export type FilterFamily = 'none' | 'movingAverage' | 'lowpass' | 'bandpass' | 'firstDifference'

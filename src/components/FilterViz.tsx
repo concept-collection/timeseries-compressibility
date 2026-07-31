@@ -118,16 +118,8 @@ function KernelPanel({ kernel, sampleRateHz }: { kernel: Float64Array; sampleRat
   )
 }
 
-/** |H(f)| in dB up to Nyquist, with the S(f) = 1 step² threshold. */
-function ResponsePanel({
-  kernel,
-  sampleRateHz,
-  sigma,
-}: {
-  kernel: Float64Array
-  sampleRateHz: number
-  sigma: number
-}) {
+/** |H(f)| in dB up to Nyquist. */
+function ResponsePanel({ kernel, sampleRateHz }: { kernel: Float64Array; sampleRateHz: number }) {
   const ref = useRef<HTMLDivElement>(null)
   const width = useWidth(ref)
   const [tip, setTip] = useState<Tip | null>(null)
@@ -145,11 +137,6 @@ function ResponsePanel({
   const xOf = (i: number) => MARGIN.left + (i / (RESPONSE_POINTS - 1)) * plotW
 
   const path = db.map((v, i) => `${i ? 'L' : 'M'}${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`).join('')
-
-  // S(f) = σ²|H|² = 1 (one step² of spectral power) sits at |H| = 1/σ. Below
-  // this line the high-resolution formula is on thin ice.
-  const stepDb = -20 * Math.log10(sigma)
-  const showStep = stepDb < dbMax && stepDb > DB_FLOOR
 
   const onMove = (e: React.PointerEvent<SVGSVGElement>) => {
     const box = e.currentTarget.getBoundingClientRect()
@@ -189,22 +176,6 @@ function ResponsePanel({
         <text x={width - MARGIN.right} y={HEIGHT - 8} textAnchor="end" className="axis-tick">
           Hz
         </text>
-        {showStep && (
-          <g>
-            <line
-              x1={MARGIN.left}
-              x2={width - MARGIN.right}
-              y1={yOf(stepDb)}
-              y2={yOf(stepDb)}
-              stroke="var(--muted)"
-              strokeWidth={1}
-              strokeDasharray="4 3"
-            />
-            <text x={width - MARGIN.right} y={yOf(stepDb) - 4} textAnchor="end" className="axis-tick">
-              S(f) = 1 step²
-            </text>
-          </g>
-        )}
         <path d={path} fill="none" stroke="var(--series-1)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
       </svg>
       <Tooltip tip={tip} />
@@ -212,11 +183,11 @@ function ResponsePanel({
   )
 }
 
-export default function FilterViz(props: { kernel: Float64Array; sampleRateHz: number; sigma: number }) {
+export default function FilterViz(props: { kernel: Float64Array; sampleRateHz: number }) {
   return (
     <div className="filter-panels">
       <KernelPanel kernel={props.kernel} sampleRateHz={props.sampleRateHz} />
-      <ResponsePanel kernel={props.kernel} sampleRateHz={props.sampleRateHz} sigma={props.sigma} />
+      <ResponsePanel kernel={props.kernel} sampleRateHz={props.sampleRateHz} />
     </div>
   )
 }

@@ -23,7 +23,6 @@ export interface CompressRequest {
   id: number
   kernel: Float64Array
   sigma: number
-  dither: boolean
   blockSize: number
   lpcOrder: number
   seed: number
@@ -44,10 +43,10 @@ const PLAIN_CODECS = [ZLIB, ZSTD, ANS, DELTA_ZLIB, DELTA_ZSTD, DELTA_ANS]
 const post = self.postMessage as (message: CompressResponse) => void
 
 self.onmessage = async (e: MessageEvent<CompressRequest>) => {
-  const { id, kernel, sigma, dither, blockSize, lpcOrder, seed } = e.data
+  const { id, kernel, sigma, blockSize, lpcOrder, seed } = e.data
   try {
     await initCodecs()
-    const samples = new LatentSource(seed).window(0, blockSize, kernel, sigma, dither)
+    const samples = new LatentSource(seed).window(0, blockSize, kernel, sigma)
     let sum = 0
     let sumSq = 0
     for (let i = 0; i < samples.length; i++) {

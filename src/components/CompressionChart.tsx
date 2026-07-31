@@ -89,7 +89,6 @@ function buildRows(results: CodecResult[], bounds: BoundResult[]): Row[] {
 export default function CompressionChart(props: {
   results: CodecResult[]
   bounds: BoundResult[]
-  theoryBits: number
   computing: boolean
 }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -98,7 +97,7 @@ export default function CompressionChart(props: {
   const [tip, setTip] = useState<Tip | null>(null)
   const [hovered, setHovered] = useState<string | null>(null)
 
-  const { results, bounds, theoryBits } = props
+  const { results, bounds } = props
   if (results.length === 0) {
     return <p className="card-note">Computing compression on the first block…</p>
   }
@@ -106,12 +105,8 @@ export default function CompressionChart(props: {
   const rows = buildRows(results, bounds)
   const value = (r: { bitsPerSample: number; ratio: number }) =>
     metric === 'bits' ? r.bitsPerSample : r.ratio
-  const theoryValue = metric === 'bits' ? theoryBits : theoryBits > 0 ? 16 / theoryBits : NaN
-  const theoryVisible = Number.isFinite(theoryValue) && theoryValue > 0
   const xMax =
-    metric === 'bits'
-      ? Math.max(16, ...rows.map(value), theoryVisible ? theoryValue : 0) * 1.02
-      : Math.max(...rows.map(value), theoryVisible ? theoryValue : 0) * 1.1
+    metric === 'bits' ? Math.max(16, ...rows.map(value)) * 1.02 : Math.max(...rows.map(value)) * 1.1
 
   const plotW = width - LABEL_W - RIGHT_PAD
   const height = AXIS_H + GROUPS.length * (GROUP_H + ROWS_PER_GROUP * ROW_H) + 6
@@ -128,10 +123,6 @@ export default function CompressionChart(props: {
     const box = ref.current!.getBoundingClientRect()
     setTip({ x: e.clientX - box.left, y: e.clientY - box.top, row })
   }
-
-  const theoryX = theoryVisible ? xOf(theoryValue) : 0
-  const theoryLabel =
-    metric === 'bits' ? `R = ${theoryBits.toFixed(2)}` : `R ⇒ ${(16 / theoryBits).toFixed(2)}×`
 
   return (
     <div>
@@ -233,28 +224,6 @@ export default function CompressionChart(props: {
               </g>
             )
           })}
-          {theoryVisible && (
-            <g>
-              <line
-                x1={theoryX}
-                x2={theoryX}
-                y1={AXIS_H - 2}
-                y2={height - 4}
-                stroke="var(--ink-2)"
-                strokeWidth={1.5}
-                strokeDasharray="5 4"
-              />
-              <text
-                x={theoryX + (theoryX > width - 150 ? -6 : 6)}
-                y={AXIS_H + 10}
-                textAnchor={theoryX > width - 150 ? 'end' : 'start'}
-                className="bar-value"
-                fill="var(--ink)"
-              >
-                {theoryLabel}
-              </text>
-            </g>
-          )}
         </svg>
         {tip && (
           <div className="viz-tooltip" style={{ left: tip.x + 14, top: tip.y - 8 }}>
@@ -291,14 +260,6 @@ export default function CompressionChart(props: {
                 <td>{r.ratio.toFixed(3)}</td>
               </tr>
             ))}
-            {theoryBits > 0 && (
-              <tr>
-                <td>theory: rate R</td>
-                <td>—</td>
-                <td>{theoryBits.toFixed(3)}</td>
-                <td>{(16 / theoryBits).toFixed(3)}</td>
-              </tr>
-            )}
           </tbody>
         </table>
       </details>

@@ -17,8 +17,6 @@ export interface ControlsProps {
   setSampleRateHz: (v: number) => void
   spec: FilterSpec
   setSpec: (v: FilterSpec) => void
-  dither: boolean
-  setDither: (v: boolean) => void
 }
 
 function formatHz(hz: number): string {
@@ -124,15 +122,6 @@ export default function Controls(p: ControlsProps) {
             </option>
           ))}
         </select>
-      </div>
-      <div className="control control-toggle">
-        <input
-          id="dither"
-          type="checkbox"
-          checked={p.dither}
-          onChange={e => p.setDither(e.target.checked)}
-        />
-        <label htmlFor="dither">dither (uniform ±½ before rounding)</label>
       </div>
     </div>
   )

@@ -1,0 +1,41 @@
+import { useMemo } from 'react'
+import katex from 'katex'
+
+function Tex({ tex, display }: { tex: string; display?: boolean }) {
+  const html = useMemo(
+    () => katex.renderToString(tex, { displayMode: !!display, throwOnError: false }),
+    [tex, display],
+  )
+  return <span dangerouslySetInnerHTML={{ __html: html }} />
+}
+
+/** Where the reference rate R comes from, in brief. */
+export default function MethodNote() {
+  return (
+    <div className="math-section">
+      <p>
+        R is the entropy rate of the quantized process z — the bits per sample that no lossless
+        code can beat. It has no usable closed form here, so it is estimated by an unbiased
+        Monte-Carlo method from the companion{' '}
+        <a href="https://github.com/concept-collection/timeseries-entropy">timeseries-entropy</a>{' '}
+        package. The estimand is the conditional entropy of the next sample given a long past,
+      </p>
+      <Tex display tex="H\big(z_{M+1} \,\big|\, z_1, \dots, z_M\big) \;\searrow\; R \qquad (M \to \infty)," />
+      <p>
+        which reaches R once M exceeds the memory of the process. A past is drawn from the
+        model, and the latent Gaussian input is Gibbs-sampled under the rounding constraints —
+        the latents that generated the past are an exact draw from the conditional, so the chain
+        starts in stationarity with no burn-in bias — emitting exact draws of z<sub>M+1</sub>.
+        Rhee–Glynn randomized telescoping with antithetic half-block corrections then turns the
+        plug-in entropies of that chain into an estimate whose expectation is exactly the
+        conditional entropy, despite the finite-sample bias of every plug-in estimate and the
+        autocorrelation of the Gibbs draws. Averaging over independent pasts gives R with an
+        honest standard error.
+      </p>
+      <p className="card-note">
+        Running the estimator in the browser is planned; until then, the command under the
+        compression chart runs it locally at the current settings.
+      </p>
+    </div>
+  )
+}

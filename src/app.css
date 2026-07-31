@@ -165,26 +165,6 @@ body {
   width: 170px;
 }
 
-.control-toggle {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  padding-bottom: 6px;
-}
-
-.control-toggle input {
-  accent-color: var(--series-1);
-  width: 16px;
-  height: 16px;
-  margin: 0;
-}
-
-.control-toggle label {
-  font-size: 13px;
-  color: var(--ink);
-}
-
 /* ---- plots ---- */
 
 .filter-panels {
@@ -507,33 +487,6 @@ body {
   max-width: 76ch;
 }
 
-.math-section h3 {
-  font-size: 12px;
-  font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--ink-2);
-  margin: 26px 0 10px;
-}
-
 .math-section .katex-display {
   margin: 14px 0;
-}
-
-.defs {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 8px 18px;
-  margin: 18px 0 0;
-  max-width: 76ch;
-}
-
-.defs dt {
-  text-align: right;
-  color: var(--ink);
-}
-
-.defs dd {
-  margin: 0;
-  color: var(--ink-2);
 }

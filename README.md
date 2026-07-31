@@ -17,13 +17,18 @@ entropy coder cannot beat, which ANS misses by 1–2% (its symbol table plus its
 own arithmetic loss).
 
 The reference rate R — the entropy rate of the process, the bits/sample limit
-no lossless method can beat — comes from the companion
+no lossless method can beat — is estimated in the browser by the method of the
+companion
 [timeseries-entropy](https://github.com/concept-collection/timeseries-entropy)
 package: an unbiased Monte-Carlo estimator of H(z_next | a long past), by Gibbs
 sampling the latent Gaussian under the rounding constraints and applying
-Rhee–Glynn randomized telescoping to the sampled chain. The app shows the exact
-command to run it at the current settings; estimating R in the browser is
-planned, and until then the UI shows a placeholder for it.
+Rhee–Glynn randomized telescoping to the sampled chain. A button starts a web
+worker that averages one independent past at a time (live mean ± se, dashed
+line on the chart) until stopped; the app also shows the exact command to run
+the Python original at the same settings as an independent check. The
+in-browser code in `src/entropy/` is a hand-synced TypeScript port of that
+package — change one, change the other. A WebGPU Gibbs sweep may replace the
+scalar one someday; the sweep is isolated so it can be swapped.
 
 ## Run it
 
@@ -38,10 +43,15 @@ npm run dev
 src/model/       the latent source (fixed seeded randomness indexed by sample
                  position, convolved zero-phase with the kernel on demand)
                  and the FIR presets
+src/entropy/     the unbiased reference-rate estimator: hand-synced TypeScript
+                 port of the timeseries-entropy package (Gibbs conditional
+                 sampler, Rhee–Glynn telescoping, Cody erfc / Acklam ndtri,
+                 xoshiro128** RNG)
 src/compress/    lossless codecs run in the browser: zlib (fflate), zstd (wasm),
                  ans.ts (a bit-identical port of simple_ans), and FLAC-style
                  integer LPC; borrowed from entropy-quantized-linear-transform
-src/worker/      the codecs run off the main thread on a debounced parameter set
+src/worker/      the codecs and the estimator run off the main thread; the
+                 estimator worker refines one past at a time until terminated
 src/components/  controls, filter plots, signal canvas, compression chart,
                  and the reference-rate method note
 ```

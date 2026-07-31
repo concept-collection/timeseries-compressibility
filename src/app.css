@@ -443,6 +443,35 @@ body {
   font-weight: 500;
 }
 
+.estimate-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 12px;
+  font-size: 12px;
+}
+
+.estimate-row button {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--baseline);
+  border-radius: 6px;
+  padding: 4px 12px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.estimate-row button:hover {
+  border-color: var(--series-1);
+}
+
+.estimate-status {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .command-row {
   display: flex;
   flex-wrap: wrap;

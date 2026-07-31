@@ -33,8 +33,10 @@ export default function MethodNote() {
         honest standard error.
       </p>
       <p className="card-note">
-        Running the estimator in the browser is planned; until then, the command under the
-        compression chart runs it locally at the current settings.
+        The estimate button under the compression chart runs exactly this method in a web
+        worker — a TypeScript port of the package (src/entropy, hand-synced), one independent
+        past at a time until stopped. The command line runs the Python original at the same
+        settings for an independent check.
       </p>
     </div>
   )

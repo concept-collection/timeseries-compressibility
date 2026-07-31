@@ -5,6 +5,7 @@ import FilterViz from './components/FilterViz'
 import ScrollingView from './components/ScrollingView'
 import CompressionChart from './components/CompressionChart'
 import MethodNote from './components/MethodNote'
+import { useReferenceRate } from './components/useReferenceRate'
 import { DEFAULT_SPEC, clampSpec, designKernel, kernelNorm } from './model/filters'
 import { LATENT_SEED } from './model/latent'
 import { DEFAULT_LPC_ORDER, LPC_ORDERS } from './compress/codecs'
@@ -129,6 +130,7 @@ export default function App() {
   const kernel = useMemo(() => designKernel(spec, sampleRateHz), [spec, sampleRateHz])
   const sigmaY = useMemo(() => sigma * kernelNorm(kernel), [kernel, sigma])
   const compression = useCompression(kernel, sigma, lpcOrder, blockSize)
+  const refRate = useReferenceRate(kernel, sigma)
 
   return (
     <div className="app">
@@ -175,12 +177,18 @@ export default function App() {
               <small>steps</small>
             </span>
           </div>
-          {/* Placeholder: R will be estimated in the browser by the unbiased
-              estimator; until then the command below produces it locally. */}
           <div className="stat">
             <span className="label">reference rate R</span>
             <span className="value">
-              — <small>bits/sample</small>
+              {refRate.mean !== null ? refRate.mean.toFixed(2) : '—'}
+              {refRate.se !== null && <small> ± {refRate.se.toFixed(2)}</small>}{' '}
+              <small>bits/sample</small>
+            </span>
+          </div>
+          <div className="stat">
+            <span className="label">implied best ratio</span>
+            <span className="value">
+              {refRate.mean !== null && refRate.mean > 0 ? `${(16 / refRate.mean).toFixed(2)}×` : '—'}
             </span>
           </div>
         </div>
@@ -214,6 +222,7 @@ export default function App() {
           <CompressionChart
             results={compression.results}
             bounds={compression.bounds}
+            refBits={refRate.mean}
             computing={compression.computing}
           />
         )}
@@ -223,12 +232,25 @@ export default function App() {
           coefficients). Baseline is raw int16 (16 bits/sample). The hollow bar in each group is
           that group's entropy limit — the order-0 entropy of the stream being coded, which no
           per-sample entropy coder can beat and ANS falls short of by its symbol table plus its
-          own arithmetic loss. The reference rate R — the entropy rate of the process itself,
-          the limit no lossless method can beat — is not yet computed in the browser; the
-          command below estimates it locally (see the method section at the bottom).
+          own arithmetic loss. The dashed line, once estimated, is the reference rate R — the
+          entropy rate of the process itself, the limit no lossless method whatsoever can beat
+          (see the method section at the bottom).
         </p>
+        <div className="estimate-row">
+          <button onClick={refRate.running ? refRate.stop : refRate.start}>
+            {refRate.running ? 'stop' : refRate.perPast.length > 0 ? 'refine R further' : 'estimate R in this browser'}
+          </button>
+          <span className="estimate-status">
+            {refRate.running
+              ? `${refRate.perPast.length} independent pasts averaged, M = ${refRate.past}` +
+                (refRate.progress ? ` · ${refRate.progress}` : '')
+              : refRate.perPast.length > 0
+                ? `${refRate.perPast.length} independent pasts averaged, M = ${refRate.past}`
+                : `unbiased Monte-Carlo conditioning on M = ${refRate.past} past samples; refines until stopped`}
+          </span>
+        </div>
         <CopyableCommand
-          label="reference rate R by unbiased Monte-Carlo (runs locally):"
+          label="or cross-check R from the command line:"
           command={mcCommand(sigma, spec, sampleRateHz)}
         />
       </section>

@@ -7,14 +7,27 @@ steps) → FIR filter → round to integers. The app shows the filter (convoluti
 kernel and frequency response, with cutoffs in Hz against a chosen sample
 rate), a window of the generated integer signal (stationary by default, with a
 play toggle to let it stream endlessly), and the measured compression of a
-block of the generated integers under nine methods — zlib, zstd, and an rANS
-entropy coder, each raw, delta-coded, and LPC-residual-coded — as bits per
-sample and as ratio against raw int16 storage. The predictor order and the
+block of the generated integers under ten methods — zlib, zstd, and an rANS
+entropy coder, each raw, delta-coded, and LPC-residual-coded, plus the
+conditional-Gaussian coder below — as bits per sample and as ratio against raw
+int16 storage. The predictor order and the
 block size are controls, so the measurement can be pushed from 10k to a million
-samples and LPC from order 1 to 128. Each prefilter group also carries a hollow
-bar: the order-0 entropy of the stream being coded, the limit a per-sample
-entropy coder cannot beat, which ANS misses by 1–2% (its symbol table plus its
-own arithmetic loss).
+samples and LPC from order 1 to 128. Under the chart, every coder that codes
+against an explicit model is scored against it — ANS against the order-0
+entropy of the stream it was handed, the arithmetic coder against its own
+predictive distribution — which separates how well a coder does its job (1–2%
+overhead for ANS, its symbol table plus its arithmetic loss) from how good the
+model was in the first place.
+
+The tenth method is the one that can pass those hollow bars: the same LPC
+prediction kept at full precision, each sample arithmetic-coded under a
+discretized Gaussian centred on the real-valued prediction. When the
+prediction error is a fraction of a quantization step (narrowband filters,
+moderate σ), whether the prediction falls near a bin centre or a bin edge is
+worth ~0.3–0.4 bits/sample — information the integer residual has already
+destroyed, which is why LPC+ANS plateaus far above R there. Its only limit is
+R itself. Like every other bar, its size is real: encoded, decoded, verified,
+side information included.
 
 The entropy rate R of the process — the bits/sample limit no lossless method
 can beat — is estimated in the browser by the method of the companion
@@ -47,8 +60,11 @@ src/entropy/     the unbiased entropy-rate estimator: hand-synced TypeScript
                  sampler, Rhee–Glynn telescoping, Cody erfc / Acklam ndtri,
                  xoshiro128** RNG)
 src/compress/    lossless codecs run in the browser: zlib (fflate), zstd (wasm),
-                 ans.ts (a bit-identical port of simple_ans), and FLAC-style
-                 integer LPC; borrowed from entropy-quantized-linear-transform
+                 ans.ts (a bit-identical port of simple_ans), FLAC-style
+                 integer LPC (borrowed from entropy-quantized-linear-transform),
+                 and conditionalGaussian.ts — real-coefficient prediction with
+                 each sample arithmetic-coded under a discretized Gaussian at
+                 the real-valued prediction
 src/worker/      the codecs and the estimator run off the main thread; the
                  estimator worker refines one past at a time until terminated
 src/components/  controls, filter plots, signal canvas, compression chart,

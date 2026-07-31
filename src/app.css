@@ -13,6 +13,7 @@
   --series-1: #2a78d6;
   --series-2: #eb6834;
   --series-3: #1baf7a;
+  --series-4: #8a5cd6;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -28,6 +29,7 @@
     --series-1: #3987e5;
     --series-2: #d95926;
     --series-3: #199e70;
+    --series-4: #9a6fe8;
   }
 }
 
@@ -385,12 +387,6 @@ body {
   vertical-align: -1px;
 }
 
-/* Hollow: the mark for a limit, matching the outlined bars. */
-.legend .swatch.hollow {
-  background: color-mix(in srgb, var(--muted) 12%, transparent);
-  border: 1.25px solid var(--muted);
-}
-
 .chart-body {
   position: relative;
   transition: opacity 0.15s;
@@ -426,11 +422,36 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Limit rows read one step quieter than the measured ones. */
-.bar-row-label.bound,
-.bar-value.bound {
-  fill: var(--muted);
-  font-style: italic;
+/* Coder overhead: a quiet strip under the chart, one entry per coder that
+   has an explicit model to be scored against. */
+.coder-efficiency {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 18px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.coder-efficiency-title {
+  flex-basis: 100%;
+  color: var(--muted);
+}
+
+.coder-efficiency-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.coder-efficiency-bits {
+  color: var(--muted);
+}
+
+.coder-efficiency-pct {
+  font-weight: 600;
 }
 
 .axis-tick {

@@ -1,14 +1,13 @@
 /**
  * Compression measurements off the main thread, so the scrolling view never
  * stutters while zstd -19 or the LPC fit runs. One message in (the model),
- * one message out (the nine codec results).
+ * one message out (the ten codec results).
  */
 import { LatentSource } from '../model/latent'
+import { conditionalGaussianCodec } from '../compress/conditionalGaussian'
 import {
   initCodecs,
   compressAll,
-  entropyBounds,
-  type BoundResult,
   ZLIB,
   ZSTD,
   ANS,
@@ -31,8 +30,6 @@ export interface CompressRequest {
 export interface CompressResponse {
   id: number
   results: CodecResult[]
-  /** Order-0 entropy limit for each prefilter group. */
-  bounds: BoundResult[]
   /** Empirical std of the quantized block, for display sanity. */
   empiricalStd: number
   error?: string
@@ -57,11 +54,14 @@ self.onmessage = async (e: MessageEvent<CompressRequest>) => {
     const empiricalStd = Math.sqrt(Math.max(0, sumSq / samples.length - mean * mean))
     post({
       id,
-      results: compressAll(samples, [...PLAIN_CODECS, ...lpcCodecs(lpcOrder)]),
-      bounds: entropyBounds(samples, lpcOrder),
+      results: compressAll(samples, [
+        ...PLAIN_CODECS,
+        ...lpcCodecs(lpcOrder),
+        conditionalGaussianCodec(lpcOrder),
+      ]),
       empiricalStd,
     })
   } catch (err) {
-    post({ id, results: [], bounds: [], empiricalStd: 0, error: String(err) })
+    post({ id, results: [], empiricalStd: 0, error: String(err) })
   }
 }

@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react'
-import type { BoundResult, CodecResult } from '../compress/codecs'
+import type { CodecResult } from '../compress/codecs'
 import { useWidth } from './useWidth'
 
 const GROUPS = ['no prefilter', 'delta', 'LPC']
 const CODER_NAMES = ['zlib', 'zstd', 'ANS']
 const CODER_VARS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)']
-const BOUND_LABEL = 'entropy limit'
+const COND_VAR = 'var(--series-4)'
 
 const LABEL_W = 100
 const RIGHT_PAD = 64
@@ -13,11 +13,10 @@ const AXIS_H = 26
 const GROUP_H = 20
 const ROW_H = 24
 const BAR_H = 16
-const ROWS_PER_GROUP = 4
 
 type Metric = 'bits' | 'ratio'
 
-/** One drawn bar: a measured codec size, or the entropy limit for its group. */
+/** One drawn bar: a measured codec size. */
 interface Row {
   key: string
   label: string
@@ -26,7 +25,6 @@ interface Row {
   bytes: number
   bitsPerSample: number
   ratio: number
-  isBound: boolean
   color: string
 }
 
@@ -49,14 +47,19 @@ function barPath(x0: number, y: number, len: number, h: number): string {
   return `M${x0},${y} h${len - r} a${r},${r} 0 0 1 ${r},${r} v${h - 2 * r} a${r},${r} 0 0 1 ${-r},${r} h${-(len - r)} z`
 }
 
-/** Codec rows then the entropy limit, group by group. */
-function buildRows(results: CodecResult[], bounds: BoundResult[]): Row[] {
-  const rows: Row[] = []
-  GROUPS.forEach((group, g) => {
-    CODER_NAMES.forEach((coder, c) => {
-      const r = results[g * 3 + c]
-      if (!r) return
-      rows.push({
+interface Group {
+  label: string
+  rows: Row[]
+}
+
+/** The three prefilter groups, then the conditional coder — results[9] — as
+ * its own group. */
+function buildGroups(results: CodecResult[]): Group[] {
+  const groups: Group[] = GROUPS.map((group, g) => ({
+    label: group,
+    rows: CODER_NAMES.map((coder, c) => ({ coder, c, r: results[g * 3 + c] }))
+      .filter(x => x.r)
+      .map(({ coder, c, r }) => ({
         key: r.codec,
         label: coder,
         name: r.codec,
@@ -64,31 +67,32 @@ function buildRows(results: CodecResult[], bounds: BoundResult[]): Row[] {
         bytes: r.bytes,
         bitsPerSample: r.bitsPerSample,
         ratio: r.ratio,
-        isBound: false,
         color: CODER_VARS[c],
-      })
+      })),
+  }))
+  const extra = results[GROUPS.length * CODER_NAMES.length]
+  if (extra) {
+    groups.push({
+      label: 'conditional',
+      rows: [
+        {
+          key: extra.codec,
+          label: 'Gaussian AC',
+          name: extra.codec,
+          note: extra.note,
+          bytes: extra.bytes,
+          bitsPerSample: extra.bitsPerSample,
+          ratio: extra.ratio,
+          color: COND_VAR,
+        },
+      ],
     })
-    const b = bounds.find(x => x.group === group)
-    if (b) {
-      rows.push({
-        key: `${group}-bound`,
-        label: BOUND_LABEL,
-        name: `${BOUND_LABEL} (${group})`,
-        note: b.note,
-        bytes: b.bytes,
-        bitsPerSample: b.bitsPerSample,
-        ratio: b.ratio,
-        isBound: true,
-        color: 'var(--muted)',
-      })
-    }
-  })
-  return rows
+  }
+  return groups
 }
 
 export default function CompressionChart(props: {
   results: CodecResult[]
-  bounds: BoundResult[]
   /** The browser-estimated entropy rate R, once at least one past is in. */
   rateBits: number | null
   computing: boolean
@@ -99,12 +103,30 @@ export default function CompressionChart(props: {
   const [tip, setTip] = useState<Tip | null>(null)
   const [hovered, setHovered] = useState<string | null>(null)
 
-  const { results, bounds, rateBits } = props
+  const { results, rateBits } = props
   if (results.length === 0) {
     return <p className="card-note">Computing compression on the first block…</p>
   }
 
-  const rows = buildRows(results, bounds)
+  const groups = buildGroups(results)
+  // Every coder that codes against an explicit model can be scored against it.
+  const efficiency = results.filter(r => r.modelBitsPerSample !== undefined)
+
+  // Group headers and bar rows laid out top to bottom; groups may differ in
+  // row count, so positions accumulate rather than being indexed.
+  const groupLabels: { label: string; y: number }[] = []
+  const placed: { row: Row; y: number }[] = []
+  let yCursor = AXIS_H
+  for (const g of groups) {
+    groupLabels.push({ label: g.label, y: yCursor + 15 })
+    yCursor += GROUP_H
+    for (const row of g.rows) {
+      placed.push({ row, y: yCursor })
+      yCursor += ROW_H
+    }
+  }
+
+  const rows = placed.map(p => p.row)
   const value = (r: { bitsPerSample: number; ratio: number }) =>
     metric === 'bits' ? r.bitsPerSample : r.ratio
   const rateValue =
@@ -115,13 +137,8 @@ export default function CompressionChart(props: {
       : Math.max(...rows.map(value), rateValue ?? 0) * 1.1
 
   const plotW = width - LABEL_W - RIGHT_PAD
-  const height = AXIS_H + GROUPS.length * (GROUP_H + ROWS_PER_GROUP * ROW_H) + 6
+  const height = yCursor + 6
   const xOf = (v: number) => LABEL_W + (v / xMax) * plotW
-  const rowY = (i: number) =>
-    AXIS_H +
-    Math.floor(i / ROWS_PER_GROUP) * (GROUP_H + ROWS_PER_GROUP * ROW_H) +
-    GROUP_H +
-    (i % ROWS_PER_GROUP) * ROW_H
 
   const fmt = (r: Row) => (metric === 'bits' ? r.bitsPerSample.toFixed(2) : `${r.ratio.toFixed(2)}×`)
 
@@ -162,8 +179,8 @@ export default function CompressionChart(props: {
             </span>
           ))}
           <span>
-            <span className="swatch hollow" />
-            entropy limit (not achieved)
+            <span className="swatch" style={{ background: COND_VAR }} />
+            cond. Gaussian AC
           </span>
         </div>
       </div>
@@ -179,45 +196,20 @@ export default function CompressionChart(props: {
             </g>
           ))}
           <line x1={xOf(0)} x2={xOf(0)} y1={AXIS_H - 6} y2={height - 4} stroke="var(--baseline)" strokeWidth={1} />
-          {GROUPS.map((g, gi) => (
-            <text
-              key={g}
-              x={0}
-              y={AXIS_H + gi * (GROUP_H + ROWS_PER_GROUP * ROW_H) + 15}
-              className="bar-group-label"
-            >
-              {g}
+          {groupLabels.map(g => (
+            <text key={g.label} x={0} y={g.y} className="bar-group-label">
+              {g.label}
             </text>
           ))}
-          {rows.map((r, i) => {
-            const y = rowY(i)
+          {placed.map(({ row: r, y }) => {
             const len = Math.max(1, (value(r) / xMax) * plotW)
             return (
               <g key={r.key} opacity={hovered === null || hovered === r.key ? 1 : 0.45}>
-                <text
-                  x={8}
-                  y={y + BAR_H / 2 + 4}
-                  className={r.isBound ? 'bar-row-label bound' : 'bar-row-label'}
-                >
+                <text x={8} y={y + BAR_H / 2 + 4} className="bar-row-label">
                   {r.label}
                 </text>
-                {r.isBound ? (
-                  // Hollow: a limit nobody reached, not a measured size.
-                  <path
-                    d={barPath(xOf(0), y + 1, len, BAR_H - 2)}
-                    fill="var(--muted)"
-                    fillOpacity={0.12}
-                    stroke="var(--muted)"
-                    strokeWidth={1.25}
-                  />
-                ) : (
-                  <path d={barPath(xOf(0), y, len, BAR_H)} fill={r.color} />
-                )}
-                <text
-                  x={xOf(0) + len + 6}
-                  y={y + BAR_H / 2 + 4}
-                  className={r.isBound ? 'bar-value bound' : 'bar-value'}
-                >
+                <path d={barPath(xOf(0), y, len, BAR_H)} fill={r.color} />
+                <text x={xOf(0) + len + 6} y={y + BAR_H / 2 + 4} className="bar-value">
                   {fmt(r)}
                 </text>
                 <rect
@@ -270,12 +262,36 @@ export default function CompressionChart(props: {
               <span className="tip-label">{tip.row.name}</span>
             </div>
             <div className="tip-label">
-              {tip.row.isBound ? 'equivalent to ' : ''}
               {tip.row.bytes.toLocaleString()} bytes · {tip.row.note}
             </div>
           </div>
         )}
       </div>
+      {/* How much each entropy coder loses against the model it is coding
+          against — its own overhead, separate from how good the model is. */}
+      {efficiency.length > 0 && (
+        <div className="coder-efficiency">
+          <span className="coder-efficiency-title">
+            entropy-coder overhead — output vs the model it codes against
+          </span>
+          {efficiency.map(r => {
+            const model = r.modelBitsPerSample as number
+            const over = model > 0 ? (r.bitsPerSample / model - 1) * 100 : 0
+            return (
+              <span key={r.codec} className="coder-efficiency-item">
+                <span className="coder-efficiency-name">{r.codec}</span>
+                <span className="coder-efficiency-bits">
+                  {r.bitsPerSample.toFixed(3)} / {model.toFixed(3)} bits
+                </span>
+                <span className="coder-efficiency-pct">
+                  {over >= 0 ? '+' : ''}
+                  {over.toFixed(1)}%
+                </span>
+              </span>
+            )
+          })}
+        </div>
+      )}
       <details className="chart-table">
         <summary>Table view</summary>
         <table>

@@ -14,12 +14,19 @@ import { fitLpc, lpcResidual, lpcRestore, modelSize } from './lpc'
 // cannot be resolved.
 import zstdWasmUrl from '../../node_modules/@bokuweb/zstd-wasm/dist/web/zstd.wasm?url'
 
+/**
+ * Compressed size in bytes, including any table the decoder needs. Codecs
+ * that code against an explicit probability model also report that model's
+ * ideal cost in bits, so the coder's own overhead — its tables, its
+ * coefficients, and its arithmetic loss — can be shown against it.
+ */
+export type CodecSize = number | { bytes: number; modelBits: number }
+
 export interface Codec {
   name: string
   /** Longer description, shown on hover. */
   note: string
-  /** Compressed size in bytes, including any table the decoder needs. */
-  size: (samples: Int16Array, bytes: Uint8Array) => number
+  size: (samples: Int16Array, bytes: Uint8Array) => CodecSize
 }
 
 /**
@@ -54,20 +61,26 @@ function asBytes(samples: Int16Array): Uint8Array {
  * original samples — so a reported size always belongs to an encoding that
  * actually round-trips. `extraBytes` covers anything else the decoder needs,
  * such as predictor coefficients.
+ *
+ * ANS codes each symbol against the histogram of `coded`, so that histogram's
+ * order-0 entropy is exactly the model this coder is aiming at.
  */
 function ansSize(
   samples: Int16Array,
   coded: Int16Array,
   inverse: (coded: Int16Array) => Int16Array,
   extraBytes = 0,
-): number {
+): CodecSize {
   const encoded = ansEncode(coded)
   const decoded = inverse(ansDecode(encoded))
   if (decoded.length !== samples.length) throw new Error('ANS round-trip length mismatch')
   for (let i = 0; i < samples.length; i++) {
     if (decoded[i] !== samples[i]) throw new Error(`ANS round-trip mismatch at ${i}`)
   }
-  return encodedSize(encoded) + extraBytes
+  return {
+    bytes: encodedSize(encoded) + extraBytes,
+    modelBits: order0Entropy(coded) * coded.length,
+  }
 }
 
 /** Predictor orders the UI offers; 32 is the FLAC default and ours. */
@@ -182,8 +195,7 @@ export const GENERAL_CODECS: Codec[] = [ZLIB, ZSTD]
 /**
  * Order-0 (memoryless) entropy of an int16 stream, in bits per sample: what a
  * perfect entropy coder for the sample histogram would spend, with nothing
- * charged for describing that histogram. The ANS bars sit above this by the
- * symbol table plus the coder's own arithmetic loss.
+ * charged for describing that histogram — the model an ANS coder aims at.
  */
 export function order0Entropy(samples: Int16Array): number {
   const counts = new Int32Array(65536)
@@ -196,38 +208,6 @@ export function order0Entropy(samples: Int16Array): number {
     }
   }
   return bits
-}
-
-export interface BoundResult {
-  /** The prefilter group this bounds, matching the codec groups. */
-  group: string
-  note: string
-  bitsPerSample: number
-  ratio: number
-  bytes: number
-}
-
-/** The order-0 bound for each prefilter: raw samples, delta, LPC residual. */
-export function entropyBounds(samples: Int16Array, lpcOrder: number): BoundResult[] {
-  const streams: { group: string; what: string; data: Int16Array }[] = [
-    { group: 'no prefilter', what: 'the samples themselves', data: samples },
-    { group: 'delta', what: 'the first differences', data: delta(samples) },
-    {
-      group: 'LPC',
-      what: `the order-${lpcOrder} prediction residual`,
-      data: lpcTransform(samples, lpcOrder).residual,
-    },
-  ]
-  return streams.map(({ group, what, data }) => {
-    const bitsPerSample = order0Entropy(data)
-    return {
-      group,
-      note: `order-0 entropy of ${what} — the limit for a per-sample entropy coder, with no symbol table or coefficients charged`,
-      bitsPerSample,
-      ratio: 16 / bitsPerSample,
-      bytes: Math.ceil((bitsPerSample * samples.length) / 8),
-    }
-  })
 }
 
 let ready: Promise<void> | null = null
@@ -254,6 +234,9 @@ export interface CodecResult {
   bytes: number
   ratio: number
   bitsPerSample: number
+  /** Ideal cost of this coder's own probability model, when it has one — the
+   * yardstick its output is measured against. Absent for zlib and zstd. */
+  modelBitsPerSample?: number
 }
 
 /**
@@ -264,13 +247,16 @@ export interface CodecResult {
 export function compressAll(samples: Int16Array, codecs: Codec[]): CodecResult[] {
   const bytes = asBytes(samples)
   return codecs.map(codec => {
-    const size = codec.size(samples, bytes)
+    const out = codec.size(samples, bytes)
+    const size = typeof out === 'number' ? out : out.bytes
     return {
       codec: codec.name,
       note: codec.note,
       bytes: size,
       ratio: bytes.byteLength / size,
       bitsPerSample: (8 * size) / samples.length,
+      modelBitsPerSample:
+        typeof out === 'number' ? undefined : out.modelBits / samples.length,
     }
   })
 }

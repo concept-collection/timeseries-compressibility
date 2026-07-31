@@ -9,7 +9,7 @@ import { useEntropyRate } from './components/useEntropyRate'
 import { DEFAULT_SPEC, clampSpec, designKernel, kernelNorm } from './model/filters'
 import { LATENT_SEED } from './model/latent'
 import { DEFAULT_LPC_ORDER, LPC_ORDERS } from './compress/codecs'
-import type { BoundResult, CodecResult } from './compress/codecs'
+import type { CodecResult } from './compress/codecs'
 import type { CompressRequest, CompressResponse } from './worker/compressWorker'
 
 const BLOCK_SIZES = [10000, 20000, 50000, 100000, 200000, 500000, 1000000]
@@ -17,13 +17,12 @@ const DEFAULT_BLOCK_SIZE = 100000
 
 interface CompressionState {
   results: CodecResult[]
-  bounds: BoundResult[]
   empiricalStd: number
   computing: boolean
   error: string | null
 }
 
-/** The nine codec sizes, measured in a worker on a debounced parameter set. */
+/** The ten codec sizes, measured in a worker on a debounced parameter set. */
 function useCompression(
   kernel: Float64Array,
   sigma: number,
@@ -32,7 +31,6 @@ function useCompression(
 ): CompressionState {
   const [state, setState] = useState<CompressionState>({
     results: [],
-    bounds: [],
     empiricalStd: 0,
     computing: true,
     error: null,
@@ -48,7 +46,6 @@ function useCompression(
       if (e.data.id !== idRef.current) return
       setState({
         results: e.data.error ? [] : e.data.results,
-        bounds: e.data.error ? [] : e.data.bounds,
         empiricalStd: e.data.empiricalStd,
         computing: false,
         error: e.data.error ?? null,
@@ -239,7 +236,6 @@ export default function App() {
         ) : (
           <CompressionChart
             results={compression.results}
-            bounds={compression.bounds}
             rateBits={entropyRate.mean}
             computing={compression.computing}
           />
@@ -247,12 +243,14 @@ export default function App() {
         <p className="card-note">
           Measured on a {blockSize.toLocaleString()}-sample block of the same latent data the
           signal view shows; sizes include everything a decoder needs (ANS symbol table, LPC
-          coefficients). Baseline is raw int16 (16 bits/sample). The hollow bar in each group is
-          that group's entropy limit — the order-0 entropy of the stream being coded, which no
-          per-sample entropy coder can beat and ANS falls short of by its symbol table plus its
-          own arithmetic loss. The dashed line is the entropy rate R of the process itself,
-          estimated by the button in the stat row above — the limit no lossless method
-          whatsoever can beat (see the method section at the bottom).
+          coefficients). Baseline is raw int16 (16 bits/sample). The dashed line is the entropy
+          rate R of the process itself, estimated by the button in the stat row above — the one
+          limit no lossless method whatsoever can beat (see the method section at the bottom).
+          What separates the methods is the model each one codes against: ANS uses the histogram
+          of whatever stream it is given, so a better prefilter is the only way it improves,
+          while the conditional-Gaussian coder codes each sample against a prediction and can
+          therefore approach R. The strip under the chart scores each coder against its own
+          model, which is a question about the coder rather than about the model.
         </p>
         <CopyableCommand
           label="cross-check R from the command line:"

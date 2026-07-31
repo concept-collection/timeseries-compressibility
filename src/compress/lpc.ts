@@ -87,6 +87,11 @@ export function fitLpc(x: Int16Array, order: number): LpcModel | null {
   return a ? quantiseCoefficients(a) : null
 }
 
+/** The unquantised order-p predictor, for coders that keep full precision. */
+export function fitRealCoeffs(x: Int16Array, order: number): Float64Array | null {
+  return levinson(autocorrelation(x, order), order)
+}
+
 /**
  * Prediction residual. The first `order` entries are the samples themselves
  * (the warm-up the decoder needs before it can predict). Differences are taken

@@ -32,8 +32,25 @@ export default function MethodNote() {
         autocorrelation of the Gibbs draws. Averaging over independent pasts gives R with an
         honest standard error.
       </p>
+      <p>
+        The dotted line on the chart is the package's analytic approximation, computed
+        instantly from the filter and σ: Szegő's formula gives the error of linearly
+        predicting the next sample from the past, with roundoff entering as a uniform noise
+        floor of variance 1/12,
+      </p>
+      <Tex
+        display
+        tex="R \;\approx\; G(s_*), \qquad s_*^2 \;=\; \exp\!\Big(\int_0^1 \ln\big(\sigma^2\,|H(f)|^2 + \tfrac{1}{12}\big)\,df\Big) \;-\; \tfrac{1}{12},"
+      />
+      <p>
+        where G(s) is the differential entropy of N(0, s²) + U(−½, ½) — exactly the entropy
+        of a rounded Gaussian averaged over grid offsets. The floor keeps the integral finite
+        where H(f) has zeros, and G saturates to zero at coarse quantization instead of
+        diverging. Treating roundoff as independent dither and prediction as linear are
+        approximations — the Monte-Carlo estimate is the exact check on them.
+      </p>
       <p className="card-note">
-        The estimate button beside the R readout runs exactly this method in a web worker — a
+        The estimate button under the Monte-Carlo readout runs exactly this method in a web worker — a
         TypeScript port of the package (src/entropy, hand-synced), one independent past at a
         time until stopped. The command line runs the Python original at the same settings for
         an independent check.

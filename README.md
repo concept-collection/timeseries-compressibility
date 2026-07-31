@@ -34,7 +34,11 @@ can beat — is estimated in the browser by the method of the companion
 [timeseries-entropy](https://github.com/concept-collection/timeseries-entropy)
 package: an unbiased Monte-Carlo estimator of H(z_next | a long past), by Gibbs
 sampling the latent Gaussian under the rounding constraints and applying
-Rhee–Glynn randomized telescoping to the sampled chain. A button starts a web
+Rhee–Glynn randomized telescoping to the sampled chain. The package's analytic
+approximation of R — Szegő's one-step prediction error with roundoff as a 1/12
+dither floor, fed through the Gaussian⊕uniform entropy — is drawn as a dotted
+reference line at all times, so the Monte-Carlo estimate lands beside its
+prediction. A button starts a web
 worker that averages one independent past at a time (live mean ± se, dashed
 line on the chart) until stopped; the app also shows the exact command to run
 the Python original at the same settings as an independent check. The
@@ -58,7 +62,7 @@ src/model/       the latent source (fixed seeded randomness indexed by sample
 src/entropy/     the unbiased entropy-rate estimator: hand-synced TypeScript
                  port of the timeseries-entropy package (Gibbs conditional
                  sampler, Rhee–Glynn telescoping, Cody erfc / Acklam ndtri,
-                 xoshiro128** RNG)
+                 xoshiro128** RNG, the analytic rate prediction of theory.py)
 src/compress/    lossless codecs run in the browser: zlib (fflate), zstd (wasm),
                  ans.ts (a bit-identical port of simple_ans), FLAC-style
                  integer LPC (borrowed from entropy-quantized-linear-transform),

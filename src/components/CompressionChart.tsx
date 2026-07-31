@@ -10,6 +10,9 @@ const COND_VAR = 'var(--series-4)'
 const LABEL_W = 100
 const RIGHT_PAD = 64
 const AXIS_H = 26
+/** Strip under the axis reserved for the two reference-line labels, so they
+ * never sit on top of the bars or each other. */
+const REF_BAND = 30
 const GROUP_H = 20
 const ROW_H = 24
 const BAR_H = 16
@@ -45,6 +48,43 @@ function axisTicks(max: number): number[] {
 function barPath(x0: number, y: number, len: number, h: number): string {
   const r = Math.min(4, len)
   return `M${x0},${y} h${len - r} a${r},${r} 0 0 1 ${r},${r} v${h - 2 * r} a${r},${r} 0 0 1 ${-r},${r} h${-(len - r)} z`
+}
+
+/** A reference-line label: a short sample of the line's own stroke, then the
+ * value in ink, flipped to end-anchored near the right edge. */
+function RefLabel(props: {
+  x: number
+  y: number
+  width: number
+  stroke: string
+  dash: string
+  text: string
+}) {
+  const flip = props.x > props.width - 170
+  const dir = flip ? -1 : 1
+  const x0 = props.x + 6 * dir
+  return (
+    <g>
+      <line
+        x1={x0}
+        x2={x0 + 16 * dir}
+        y1={props.y - 4}
+        y2={props.y - 4}
+        stroke={props.stroke}
+        strokeWidth={1.5}
+        strokeDasharray={props.dash}
+      />
+      <text
+        x={x0 + 20 * dir}
+        y={props.y}
+        textAnchor={flip ? 'end' : 'start'}
+        className="bar-value"
+        fill="var(--ink)"
+      >
+        {props.text}
+      </text>
+    </g>
+  )
 }
 
 interface Group {
@@ -95,6 +135,10 @@ export default function CompressionChart(props: {
   results: CodecResult[]
   /** The browser-estimated entropy rate R, once at least one past is in. */
   rateBits: number | null
+  /** Standard error of that estimate, drawn as a band around its line. */
+  rateSe: number | null
+  /** The analytic prediction of R, always shown as a dotted reference. */
+  theoryBits: number
   computing: boolean
 }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -103,7 +147,7 @@ export default function CompressionChart(props: {
   const [tip, setTip] = useState<Tip | null>(null)
   const [hovered, setHovered] = useState<string | null>(null)
 
-  const { results, rateBits } = props
+  const { results, rateBits, rateSe, theoryBits } = props
   if (results.length === 0) {
     return <p className="card-note">Computing compression on the first block…</p>
   }
@@ -116,7 +160,7 @@ export default function CompressionChart(props: {
   // row count, so positions accumulate rather than being indexed.
   const groupLabels: { label: string; y: number }[] = []
   const placed: { row: Row; y: number }[] = []
-  let yCursor = AXIS_H
+  let yCursor = AXIS_H + REF_BAND
   for (const g of groups) {
     groupLabels.push({ label: g.label, y: yCursor + 15 })
     yCursor += GROUP_H
@@ -131,10 +175,8 @@ export default function CompressionChart(props: {
     metric === 'bits' ? r.bitsPerSample : r.ratio
   const rateValue =
     rateBits !== null && rateBits > 0 ? (metric === 'bits' ? rateBits : 16 / rateBits) : null
-  const xMax =
-    metric === 'bits'
-      ? Math.max(16, ...rows.map(value), rateValue ?? 0) * 1.02
-      : Math.max(...rows.map(value), rateValue ?? 0) * 1.1
+  const theoryValue = theoryBits > 0 ? (metric === 'bits' ? theoryBits : 16 / theoryBits) : null
+  const xMax = Math.max(...rows.map(value), rateValue ?? 0, theoryValue ?? 0) * 1.1
 
   const plotW = width - LABEL_W - RIGHT_PAD
   const height = yCursor + 6
@@ -151,9 +193,25 @@ export default function CompressionChart(props: {
   const rateLabel =
     rateBits !== null && rateBits > 0
       ? metric === 'bits'
-        ? `R = ${rateBits.toFixed(2)}`
-        : `R ⇒ ${(16 / rateBits).toFixed(2)}×`
+        ? `Monte-Carlo = ${rateBits.toFixed(2)}`
+        : `Monte-Carlo ⇒ ${(16 / rateBits).toFixed(2)}×`
       : ''
+  const theoryX = theoryValue !== null ? xOf(theoryValue) : 0
+  const theoryLabel =
+    theoryValue !== null
+      ? metric === 'bits'
+        ? `theory ≈ ${theoryBits.toFixed(2)}`
+        : `theory ⇒ ${(16 / theoryBits).toFixed(2)}×`
+      : ''
+  // ± one standard error around the Monte-Carlo line, in the plotted metric.
+  let band: { x: number; w: number } | null = null
+  if (rateBits !== null && rateBits > 0 && rateSe !== null && rateSe > 0) {
+    const loBits = Math.max(rateBits - rateSe, 1e-9)
+    const hiBits = rateBits + rateSe
+    const x1 = xOf(metric === 'bits' ? loBits : 16 / hiBits)
+    const x2 = Math.min(xOf(metric === 'bits' ? hiBits : 16 / loBits), LABEL_W + plotW)
+    band = { x: x1, w: Math.max(x2 - x1, 0) }
+  }
 
   return (
     <div>
@@ -196,6 +254,16 @@ export default function CompressionChart(props: {
             </g>
           ))}
           <line x1={xOf(0)} x2={xOf(0)} y1={AXIS_H - 6} y2={height - 4} stroke="var(--baseline)" strokeWidth={1} />
+          {band && (
+            <rect
+              x={band.x}
+              y={AXIS_H - 2}
+              width={band.w}
+              height={height - 2 - AXIS_H}
+              fill="var(--ink-2)"
+              opacity={0.15}
+            />
+          )}
           {groupLabels.map(g => (
             <text key={g.label} x={0} y={g.y} className="bar-group-label">
               {g.label}
@@ -230,6 +298,27 @@ export default function CompressionChart(props: {
               </g>
             )
           })}
+          {theoryValue !== null && (
+            <g>
+              <line
+                x1={theoryX}
+                x2={theoryX}
+                y1={AXIS_H - 2}
+                y2={height - 4}
+                stroke="var(--theory)"
+                strokeWidth={1.5}
+                strokeDasharray="2 3"
+              />
+              <RefLabel
+                x={theoryX}
+                y={AXIS_H + 11}
+                width={width}
+                stroke="var(--theory)"
+                dash="2 3"
+                text={theoryLabel}
+              />
+            </g>
+          )}
           {rateValue !== null && (
             <g>
               <line
@@ -241,15 +330,14 @@ export default function CompressionChart(props: {
                 strokeWidth={1.5}
                 strokeDasharray="5 4"
               />
-              <text
-                x={rateX + (rateX > width - 150 ? -6 : 6)}
-                y={AXIS_H + 10}
-                textAnchor={rateX > width - 150 ? 'end' : 'start'}
-                className="bar-value"
-                fill="var(--ink)"
-              >
-                {rateLabel}
-              </text>
+              <RefLabel
+                x={rateX}
+                y={AXIS_H + 25}
+                width={width}
+                stroke="var(--ink-2)"
+                dash="5 4"
+                text={rateLabel}
+              />
             </g>
           )}
         </svg>
@@ -312,11 +400,22 @@ export default function CompressionChart(props: {
                 <td>{r.ratio.toFixed(3)}</td>
               </tr>
             ))}
+            {theoryBits > 0 && (
+              <tr>
+                <td>entropy rate R — analytic theory</td>
+                <td>—</td>
+                <td>{theoryBits.toFixed(3)}</td>
+                <td>{(16 / theoryBits).toFixed(3)}</td>
+              </tr>
+            )}
             {rateBits !== null && rateBits > 0 && (
               <tr>
-                <td>entropy rate R (Monte-Carlo)</td>
+                <td>entropy rate R — Monte-Carlo ground truth</td>
                 <td>—</td>
-                <td>{rateBits.toFixed(3)}</td>
+                <td>
+                  {rateBits.toFixed(3)}
+                  {rateSe !== null && rateSe > 0 ? ` ± ${rateSe.toFixed(3)}` : ''}
+                </td>
                 <td>{(16 / rateBits).toFixed(3)}</td>
               </tr>
             )}

@@ -6,6 +6,7 @@ import ScrollingView from './components/ScrollingView'
 import CompressionChart from './components/CompressionChart'
 import MethodNote from './components/MethodNote'
 import { useEntropyRate } from './components/useEntropyRate'
+import { predictEntropyRate } from './entropy'
 import { DEFAULT_SPEC, clampSpec, designKernel, kernelNorm } from './model/filters'
 import { LATENT_SEED } from './model/latent'
 import { DEFAULT_LPC_ORDER, LPC_ORDERS } from './compress/codecs'
@@ -128,6 +129,7 @@ export default function App() {
   const sigmaY = useMemo(() => sigma * kernelNorm(kernel), [kernel, sigma])
   const compression = useCompression(kernel, sigma, lpcOrder, blockSize)
   const entropyRate = useEntropyRate(kernel, sigma)
+  const theoryBits = useMemo(() => predictEntropyRate(kernel, sigma), [kernel, sigma])
 
   return (
     <div className="app">
@@ -160,26 +162,35 @@ export default function App() {
 
       <section className="card">
         <h2>Compression</h2>
+        {/* Two readouts of the same number, each keyed to its chart line by a
+            sample of that line's own stroke. */}
         <div className="stat-row">
           <div className="stat">
-            <span className="label">predicted std of z</span>
+            <span className="label">
+              <span className="line-swatch" style={{ borderTop: '2px dotted var(--theory)' }} />
+              entropy rate R — analytic theory
+            </span>
             <span className="value">
-              {sigmaY.toFixed(2)} <small>steps</small>
+              {theoryBits.toFixed(2)} <small>bits/sample</small>
+            </span>
+            <span className="stat-sub">
+              {theoryBits > 0 ? `best possible ratio ${(16 / theoryBits).toFixed(2)}×` : '—'}
             </span>
           </div>
           <div className="stat">
-            <span className="label">measured std of z</span>
-            <span className="value">
-              {compression.results.length > 0 ? compression.empiricalStd.toFixed(2) : '…'}{' '}
-              <small>steps</small>
+            <span className="label">
+              <span className="line-swatch" style={{ borderTop: '2px dashed var(--ink-2)' }} />
+              entropy rate R — Monte-Carlo ground truth
             </span>
-          </div>
-          <div className="stat">
-            <span className="label">entropy rate R</span>
             <span className="value">
               {entropyRate.mean !== null ? entropyRate.mean.toFixed(2) : '—'}
               {entropyRate.se !== null && <small> ± {entropyRate.se.toFixed(2)}</small>}{' '}
               <small>bits/sample</small>
+            </span>
+            <span className="stat-sub">
+              {entropyRate.mean !== null && entropyRate.mean > 0
+                ? `best possible ratio ${(16 / entropyRate.mean).toFixed(2)}×`
+                : 'run the estimate to check the theory'}
             </span>
             {/* The estimate lives with its readout: start, watch it refine,
                 stop; a model change resets it. */}
@@ -196,14 +207,6 @@ export default function App() {
                     ? `${entropyRate.perPast.length} estimates · M = ${entropyRate.past}`
                     : `M = ${entropyRate.past}`}
               </span>
-            </span>
-          </div>
-          <div className="stat">
-            <span className="label">implied best ratio</span>
-            <span className="value">
-              {entropyRate.mean !== null && entropyRate.mean > 0
-                ? `${(16 / entropyRate.mean).toFixed(2)}×`
-                : '—'}
             </span>
           </div>
         </div>
@@ -237,15 +240,18 @@ export default function App() {
           <CompressionChart
             results={compression.results}
             rateBits={entropyRate.mean}
+            rateSe={entropyRate.se}
+            theoryBits={theoryBits}
             computing={compression.computing}
           />
         )}
         <p className="card-note">
           Measured on a {blockSize.toLocaleString()}-sample block of the same latent data the
           signal view shows; sizes include everything a decoder needs (ANS symbol table, LPC
-          coefficients). Baseline is raw int16 (16 bits/sample). The dashed line is the entropy
-          rate R of the process itself, estimated by the button in the stat row above — the one
-          limit no lossless method whatsoever can beat (see the method section at the bottom).
+          coefficients). Baseline is raw int16 (16 bits/sample). The two reference lines mark
+          the entropy rate R of the process — the one limit no lossless method whatsoever can
+          beat: dotted for the analytic theory, dashed for the Monte-Carlo ground truth, shaded
+          by its standard error (see the method section at the bottom).
           What separates the methods is the model each one codes against: ANS uses the histogram
           of whatever stream it is given, so a better prefilter is the only way it improves,
           while the conditional-Gaussian coder codes each sample against a prediction and can

@@ -13,6 +13,7 @@ export { unbiasedEntropy } from './estimator'
 export { ConditionalChain, truncatedStdNormal } from './model'
 export { Rng } from './rng'
 export { ndtr, ndtri, erfc } from './normal'
+export { predictEntropyRate, gaussUniformEntropy, logSpectrumMean } from './theory'
 
 export const N0 = 128
 export const R_EXPONENT = 1.5

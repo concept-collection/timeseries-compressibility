@@ -14,6 +14,7 @@
   --series-2: #eb6834;
   --series-3: #1baf7a;
   --series-4: #8a5cd6;
+  --theory: #e87ba4;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -30,6 +31,7 @@
     --series-2: #d95926;
     --series-3: #199e70;
     --series-4: #9a6fe8;
+    --theory: #d55181;
   }
 }
 
@@ -276,6 +278,20 @@ body {
   font-size: 12px;
   font-weight: 400;
   color: var(--muted);
+}
+
+/* A sample of a chart reference line's stroke, keying a stat to its line. */
+.line-swatch {
+  display: inline-block;
+  width: 18px;
+  margin: 0 6px 3px 0;
+  vertical-align: middle;
+}
+
+.stat-sub {
+  font-size: 12px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
 }
 
 .stat-action {

@@ -1,0 +1,53 @@
+model: sigma=5.0 filter=bandpass L=31 M=1024
+48 pasts x 8 reps, n0=128 r=1.5 thin=2
+  past   1/48: H = 0.7113   running mean 0.7113 +/- nan
+  past   2/48: H = 0.9976   running mean 0.8544 +/- 0.1431
+  past   3/48: H = 0.5336   running mean 0.7475 +/- 0.1352
+  past   4/48: H = 1.0042   running mean 0.8117 +/- 0.1151
+  past   5/48: H = 0.4127   running mean 0.7319 +/- 0.1196
+  past   6/48: H = 0.7989   running mean 0.7430 +/- 0.0983
+  past   7/48: H = 0.7610   running mean 0.7456 +/- 0.0831
+  past   8/48: H = 0.5111   running mean 0.7163 +/- 0.0777
+  past   9/48: H = 0.9950   running mean 0.7473 +/- 0.0752
+  past  10/48: H = 0.9849   running mean 0.7710 +/- 0.0714
+  past  11/48: H = 0.6413   running mean 0.7592 +/- 0.0656
+  past  12/48: H = 0.3640   running mean 0.7263 +/- 0.0684
+  past  13/48: H = 0.0534   running mean 0.6745 +/- 0.0814
+  past  14/48: H = 0.8967   running mean 0.6904 +/- 0.0771
+  past  15/48: H = 0.0997   running mean 0.6510 +/- 0.0818
+  past  16/48: H = 0.2239   running mean 0.6243 +/- 0.0811
+  past  17/48: H = 0.2020   running mean 0.5995 +/- 0.0801
+  past  18/48: H = 0.0822   running mean 0.5707 +/- 0.0808
+  past  19/48: H = 0.7783   running mean 0.5817 +/- 0.0772
+  past  20/48: H = 0.9495   running mean 0.6001 +/- 0.0755
+  past  21/48: H = 0.7712   running mean 0.6082 +/- 0.0723
+  past  22/48: H = 0.2220   running mean 0.5907 +/- 0.0711
+  past  23/48: H = 0.9836   running mean 0.6077 +/- 0.0701
+  past  24/48: H = 0.7568   running mean 0.6140 +/- 0.0674
+  past  25/48: H = 0.7307   running mean 0.6186 +/- 0.0648
+  past  26/48: H = 0.9518   running mean 0.6314 +/- 0.0636
+  past  27/48: H = 0.8170   running mean 0.6383 +/- 0.0616
+  past  28/48: H = 0.8275   running mean 0.6451 +/- 0.0597
+  past  29/48: H = 0.7904   running mean 0.6501 +/- 0.0578
+  past  30/48: H = 0.6843   running mean 0.6512 +/- 0.0559
+  past  31/48: H = 0.4105   running mean 0.6435 +/- 0.0546
+  past  32/48: H = 0.9649   running mean 0.6535 +/- 0.0538
+  past  33/48: H = 0.8406   running mean 0.6592 +/- 0.0525
+  past  34/48: H = 0.1328   running mean 0.6437 +/- 0.0532
+  past  35/48: H = 0.8578   running mean 0.6498 +/- 0.0520
+  past  36/48: H = 0.0236   running mean 0.6324 +/- 0.0535
+  past  37/48: H = 0.9863   running mean 0.6420 +/- 0.0529
+  past  38/48: H = 0.8351   running mean 0.6471 +/- 0.0517
+  past  39/48: H = 0.9460   running mean 0.6547 +/- 0.0509
+  past  40/48: H = 0.8007   running mean 0.6584 +/- 0.0498
+  past  41/48: H = 0.1739   running mean 0.6466 +/- 0.0500
+  past  42/48: H = 0.5200   running mean 0.6435 +/- 0.0489
+  past  43/48: H = 0.2239   running mean 0.6338 +/- 0.0487
+  past  44/48: H = 0.8977   running mean 0.6398 +/- 0.0480
+  past  45/48: H = 0.3833   running mean 0.6341 +/- 0.0472
+  past  46/48: H = 0.9892   running mean 0.6418 +/- 0.0468
+  past  47/48: H = 1.0626   running mean 0.6508 +/- 0.0467
+  past  48/48: H = 0.9816   running mean 0.6576 +/- 0.0462
+
+H(z_next | 1024 past samples) = 0.6576 +/- 0.0462 bits/sample   (ratio vs int16: 24.329x)
+note: an upper bound on the entropy rate that tightens as --past grows.

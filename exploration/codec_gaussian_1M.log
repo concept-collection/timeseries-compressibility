@@ -1,0 +1,5 @@
+encoded 1048576 samples in 7.1s
+  ideal model cross-entropy (block fit): 0.7149 bits/sample
+  payload 93887 B + header 270 B = 94157 B
+  -> 0.7184 bits/sample   ratio vs int16: 22.27x
+decoded in 7.7s   round-trip exact: True

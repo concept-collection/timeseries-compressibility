@@ -1,0 +1,9 @@
+sigma*|h0| (innovation scale given full latent past) = 0.02161
+    50/300: rate = 1.0758 +/- 0.2135 bits/sample (floor hits: 0)
+   100/300: rate = 0.8102 +/- 0.1261 bits/sample (floor hits: 0)
+   150/300: rate = 0.7488 +/- 0.0916 bits/sample (floor hits: 0)
+   200/300: rate = 0.6868 +/- 0.0726 bits/sample (floor hits: 0)
+   250/300: rate = 0.6161 +/- 0.0598 bits/sample (floor hits: 0)
+   300/300: rate = 0.6742 +/- 0.0646 bits/sample (floor hits: 1)
+
+MC-codec achievable rate (M=512, 60 sweeps): 0.6742 +/- 0.0646 bits/sample -> ratio 23.7x

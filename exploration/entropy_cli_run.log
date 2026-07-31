@@ -1,0 +1,29 @@
+model: sigma=5.0 filter=bandpass L=31 M=512
+24 pasts x 8 reps, n0=128 r=1.5 thin=1
+  past   1/24: H = 0.7268   running mean 0.7268 +/- nan
+  past   2/24: H = 0.6755   running mean 0.7012 +/- 0.0257
+  past   3/24: H = 0.7716   running mean 0.7247 +/- 0.0278
+  past   4/24: H = 0.2857   running mean 0.6149 +/- 0.1115
+  past   5/24: H = 0.6559   running mean 0.6231 +/- 0.0867
+  past   6/24: H = 0.4595   running mean 0.5958 +/- 0.0759
+  past   7/24: H = 0.9782   running mean 0.6505 +/- 0.0843
+  past   8/24: H = 0.6822   running mean 0.6544 +/- 0.0731
+  past   9/24: H = 0.3457   running mean 0.6201 +/- 0.0730
+  past  10/24: H = 0.7768   running mean 0.6358 +/- 0.0672
+  past  11/24: H = 0.0000   running mean 0.5780 +/- 0.0838
+  past  12/24: H = 0.3871   running mean 0.5621 +/- 0.0782
+  past  13/24: H = 0.9726   running mean 0.5937 +/- 0.0785
+  past  14/24: H = 0.0791   running mean 0.5569 +/- 0.0815
+  past  15/24: H = 0.1500   running mean 0.5298 +/- 0.0806
+  past  16/24: H = 0.8008   running mean 0.5467 +/- 0.0772
+  past  17/24: H = 0.2154   running mean 0.5272 +/- 0.0751
+  past  18/24: H = 1.1716   running mean 0.5630 +/- 0.0794
+  past  19/24: H = 0.5296   running mean 0.5613 +/- 0.0751
+  past  20/24: H = 1.0329   running mean 0.5849 +/- 0.0750
+  past  21/24: H = 0.9684   running mean 0.6031 +/- 0.0737
+  past  22/24: H = 0.7480   running mean 0.6097 +/- 0.0706
+  past  23/24: H = 0.5959   running mean 0.6091 +/- 0.0674
+  past  24/24: H = 0.7638   running mean 0.6155 +/- 0.0649
+
+H(z_next | 512 past samples) = 0.6155 +/- 0.0649 bits/sample   (ratio vs int16: 25.993x)
+note: an upper bound on the entropy rate that tightens as --past grows.

@@ -1,0 +1,9 @@
+model: sigma=5.0 filter=bandpass L=31 M=512
+pilot: 8 pasts, levels 1..6, n0=128
+  m=1: rms Delta = 0.00777
+  m=2: rms Delta = 0.01553   decay exponent -2.00
+  m=3: rms Delta = 0.00699   decay exponent 2.30
+  m=4: rms Delta = 0.00233   decay exponent 3.17
+  m=5: rms Delta = 0.00241   decay exponent -0.10
+  m=6: rms Delta = 0.00051   decay exponent 4.48
+choose r safely below the E[Delta^2] decay exponent (and > 1); r=1.5 suits decay near 2.

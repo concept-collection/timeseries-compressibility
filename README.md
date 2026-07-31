@@ -16,9 +16,8 @@ bar: the order-0 entropy of the stream being coded, the limit a per-sample
 entropy coder cannot beat, which ANS misses by 1–2% (its symbol table plus its
 own arithmetic loss).
 
-The reference rate R — the entropy rate of the process, the bits/sample limit
-no lossless method can beat — is estimated in the browser by the method of the
-companion
+The entropy rate R of the process — the bits/sample limit no lossless method
+can beat — is estimated in the browser by the method of the companion
 [timeseries-entropy](https://github.com/concept-collection/timeseries-entropy)
 package: an unbiased Monte-Carlo estimator of H(z_next | a long past), by Gibbs
 sampling the latent Gaussian under the rounding constraints and applying
@@ -43,7 +42,7 @@ npm run dev
 src/model/       the latent source (fixed seeded randomness indexed by sample
                  position, convolved zero-phase with the kernel on demand)
                  and the FIR presets
-src/entropy/     the unbiased reference-rate estimator: hand-synced TypeScript
+src/entropy/     the unbiased entropy-rate estimator: hand-synced TypeScript
                  port of the timeseries-entropy package (Gibbs conditional
                  sampler, Rhee–Glynn telescoping, Cody erfc / Acklam ndtri,
                  xoshiro128** RNG)
@@ -53,7 +52,7 @@ src/compress/    lossless codecs run in the browser: zlib (fflate), zstd (wasm),
 src/worker/      the codecs and the estimator run off the main thread; the
                  estimator worker refines one past at a time until terminated
 src/components/  controls, filter plots, signal canvas, compression chart,
-                 and the reference-rate method note
+                 and the entropy-rate method note
 ```
 
 Every reported size round-trips through the decoder and includes whatever the

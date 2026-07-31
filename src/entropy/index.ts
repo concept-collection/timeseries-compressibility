@@ -1,5 +1,5 @@
 /**
- * In-browser unbiased estimation of H(z_{M+1} | z_1..z_M) — the reference
+ * In-browser unbiased estimation of H(z_{M+1} | z_1..z_M) — the entropy
  * rate R — for the app's model. Hand-synced TypeScript port of the sibling
  * timeseries-entropy package (see the headers of estimator.ts / model.ts);
  * defaults match its CLI so browser runs and `timeseries-entropy` runs

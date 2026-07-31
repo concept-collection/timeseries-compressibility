@@ -276,6 +276,36 @@ body {
   color: var(--muted);
 }
 
+.stat-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+  font-size: 12px;
+}
+
+.stat-action button {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--baseline);
+  border-radius: 6px;
+  padding: 1px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.stat-action button:hover {
+  border-color: var(--series-1);
+}
+
+.estimate-status {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .measure-row {
   display: flex;
   flex-wrap: wrap;
@@ -441,35 +471,6 @@ body {
 .chart-table th {
   color: var(--muted);
   font-weight: 500;
-}
-
-.estimate-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 10px;
-  margin-top: 12px;
-  font-size: 12px;
-}
-
-.estimate-row button {
-  background: var(--surface);
-  color: var(--ink);
-  border: 1px solid var(--baseline);
-  border-radius: 6px;
-  padding: 4px 12px;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.estimate-row button:hover {
-  border-color: var(--series-1);
-}
-
-.estimate-status {
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
 }
 
 .command-row {

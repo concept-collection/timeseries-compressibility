@@ -5,7 +5,7 @@ import FilterViz from './components/FilterViz'
 import ScrollingView from './components/ScrollingView'
 import CompressionChart from './components/CompressionChart'
 import MethodNote from './components/MethodNote'
-import { useReferenceRate } from './components/useReferenceRate'
+import { useEntropyRate } from './components/useEntropyRate'
 import { DEFAULT_SPEC, clampSpec, designKernel, kernelNorm } from './model/filters'
 import { LATENT_SEED } from './model/latent'
 import { DEFAULT_LPC_ORDER, LPC_ORDERS } from './compress/codecs'
@@ -84,7 +84,7 @@ function useCompression(
 }
 
 /**
- * The terminal command that estimates the reference rate R at the current
+ * The terminal command that estimates the entropy rate R at the current
  * settings, using the unbiased Monte-Carlo estimator from the companion
  * timeseries-entropy package.
  */
@@ -130,7 +130,7 @@ export default function App() {
   const kernel = useMemo(() => designKernel(spec, sampleRateHz), [spec, sampleRateHz])
   const sigmaY = useMemo(() => sigma * kernelNorm(kernel), [kernel, sigma])
   const compression = useCompression(kernel, sigma, lpcOrder, blockSize)
-  const refRate = useReferenceRate(kernel, sigma)
+  const entropyRate = useEntropyRate(kernel, sigma)
 
   return (
     <div className="app">
@@ -178,17 +178,35 @@ export default function App() {
             </span>
           </div>
           <div className="stat">
-            <span className="label">reference rate R</span>
+            <span className="label">entropy rate R</span>
             <span className="value">
-              {refRate.mean !== null ? refRate.mean.toFixed(2) : '—'}
-              {refRate.se !== null && <small> ± {refRate.se.toFixed(2)}</small>}{' '}
+              {entropyRate.mean !== null ? entropyRate.mean.toFixed(2) : '—'}
+              {entropyRate.se !== null && <small> ± {entropyRate.se.toFixed(2)}</small>}{' '}
               <small>bits/sample</small>
+            </span>
+            {/* The estimate lives with its readout: start, watch it refine,
+                stop; a model change resets it. */}
+            <span className="stat-action">
+              <button onClick={entropyRate.running ? entropyRate.stop : entropyRate.start}>
+                {entropyRate.running ? 'stop' : entropyRate.perPast.length > 0 ? 'refine' : 'estimate'}
+              </button>
+              {/* Each independent past contributes one unbiased estimate;
+                  the readout is their average, so that is the word used. */}
+              <span className="estimate-status">
+                {entropyRate.running
+                  ? `${entropyRate.perPast.length} estimates · ${entropyRate.progress ?? 'starting…'}`
+                  : entropyRate.perPast.length > 0
+                    ? `${entropyRate.perPast.length} estimates · M = ${entropyRate.past}`
+                    : `M = ${entropyRate.past}`}
+              </span>
             </span>
           </div>
           <div className="stat">
             <span className="label">implied best ratio</span>
             <span className="value">
-              {refRate.mean !== null && refRate.mean > 0 ? `${(16 / refRate.mean).toFixed(2)}×` : '—'}
+              {entropyRate.mean !== null && entropyRate.mean > 0
+                ? `${(16 / entropyRate.mean).toFixed(2)}×`
+                : '—'}
             </span>
           </div>
         </div>
@@ -222,7 +240,7 @@ export default function App() {
           <CompressionChart
             results={compression.results}
             bounds={compression.bounds}
-            refBits={refRate.mean}
+            rateBits={entropyRate.mean}
             computing={compression.computing}
           />
         )}
@@ -232,25 +250,12 @@ export default function App() {
           coefficients). Baseline is raw int16 (16 bits/sample). The hollow bar in each group is
           that group's entropy limit — the order-0 entropy of the stream being coded, which no
           per-sample entropy coder can beat and ANS falls short of by its symbol table plus its
-          own arithmetic loss. The dashed line, once estimated, is the reference rate R — the
-          entropy rate of the process itself, the limit no lossless method whatsoever can beat
-          (see the method section at the bottom).
+          own arithmetic loss. The dashed line is the entropy rate R of the process itself,
+          estimated by the button in the stat row above — the limit no lossless method
+          whatsoever can beat (see the method section at the bottom).
         </p>
-        <div className="estimate-row">
-          <button onClick={refRate.running ? refRate.stop : refRate.start}>
-            {refRate.running ? 'stop' : refRate.perPast.length > 0 ? 'refine R further' : 'estimate R in this browser'}
-          </button>
-          <span className="estimate-status">
-            {refRate.running
-              ? `${refRate.perPast.length} independent pasts averaged, M = ${refRate.past}` +
-                (refRate.progress ? ` · ${refRate.progress}` : '')
-              : refRate.perPast.length > 0
-                ? `${refRate.perPast.length} independent pasts averaged, M = ${refRate.past}`
-                : `unbiased Monte-Carlo conditioning on M = ${refRate.past} past samples; refines until stopped`}
-          </span>
-        </div>
         <CopyableCommand
-          label="or cross-check R from the command line:"
+          label="cross-check R from the command line:"
           command={mcCommand(sigma, spec, sampleRateHz)}
         />
       </section>
@@ -271,7 +276,7 @@ export default function App() {
       </section>
 
       <section className="card">
-        <h2>The reference rate</h2>
+        <h2>The entropy rate</h2>
         <MethodNote />
       </section>
     </div>

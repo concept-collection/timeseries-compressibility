@@ -1,5 +1,5 @@
 /**
- * The reference-rate estimator off the main thread: one message starts an
+ * The entropy-rate estimator off the main thread: one message starts an
  * endless refinement loop that posts one unbiased value per completed past
  * (with per-rep progress in between). Stopping is worker termination — the
  * loop never yields, but outgoing messages still flow, and per-past values

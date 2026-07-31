@@ -9,7 +9,7 @@ function Tex({ tex, display }: { tex: string; display?: boolean }) {
   return <span dangerouslySetInnerHTML={{ __html: html }} />
 }
 
-/** Where the reference rate R comes from, in brief. */
+/** Where the entropy rate R comes from, in brief. */
 export default function MethodNote() {
   return (
     <div className="math-section">
@@ -33,10 +33,10 @@ export default function MethodNote() {
         honest standard error.
       </p>
       <p className="card-note">
-        The estimate button under the compression chart runs exactly this method in a web
-        worker — a TypeScript port of the package (src/entropy, hand-synced), one independent
-        past at a time until stopped. The command line runs the Python original at the same
-        settings for an independent check.
+        The estimate button beside the R readout runs exactly this method in a web worker — a
+        TypeScript port of the package (src/entropy, hand-synced), one independent past at a
+        time until stopped. The command line runs the Python original at the same settings for
+        an independent check.
       </p>
     </div>
   )

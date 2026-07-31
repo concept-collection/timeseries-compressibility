@@ -89,8 +89,8 @@ function buildRows(results: CodecResult[], bounds: BoundResult[]): Row[] {
 export default function CompressionChart(props: {
   results: CodecResult[]
   bounds: BoundResult[]
-  /** The browser-estimated reference rate R, once at least one past is in. */
-  refBits: number | null
+  /** The browser-estimated entropy rate R, once at least one past is in. */
+  rateBits: number | null
   computing: boolean
 }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -99,7 +99,7 @@ export default function CompressionChart(props: {
   const [tip, setTip] = useState<Tip | null>(null)
   const [hovered, setHovered] = useState<string | null>(null)
 
-  const { results, bounds, refBits } = props
+  const { results, bounds, rateBits } = props
   if (results.length === 0) {
     return <p className="card-note">Computing compression on the first block…</p>
   }
@@ -107,12 +107,12 @@ export default function CompressionChart(props: {
   const rows = buildRows(results, bounds)
   const value = (r: { bitsPerSample: number; ratio: number }) =>
     metric === 'bits' ? r.bitsPerSample : r.ratio
-  const refValue =
-    refBits !== null && refBits > 0 ? (metric === 'bits' ? refBits : 16 / refBits) : null
+  const rateValue =
+    rateBits !== null && rateBits > 0 ? (metric === 'bits' ? rateBits : 16 / rateBits) : null
   const xMax =
     metric === 'bits'
-      ? Math.max(16, ...rows.map(value), refValue ?? 0) * 1.02
-      : Math.max(...rows.map(value), refValue ?? 0) * 1.1
+      ? Math.max(16, ...rows.map(value), rateValue ?? 0) * 1.02
+      : Math.max(...rows.map(value), rateValue ?? 0) * 1.1
 
   const plotW = width - LABEL_W - RIGHT_PAD
   const height = AXIS_H + GROUPS.length * (GROUP_H + ROWS_PER_GROUP * ROW_H) + 6
@@ -130,12 +130,12 @@ export default function CompressionChart(props: {
     setTip({ x: e.clientX - box.left, y: e.clientY - box.top, row })
   }
 
-  const refX = refValue !== null ? xOf(refValue) : 0
-  const refLabel =
-    refBits !== null && refBits > 0
+  const rateX = rateValue !== null ? xOf(rateValue) : 0
+  const rateLabel =
+    rateBits !== null && rateBits > 0
       ? metric === 'bits'
-        ? `R = ${refBits.toFixed(2)}`
-        : `R ⇒ ${(16 / refBits).toFixed(2)}×`
+        ? `R = ${rateBits.toFixed(2)}`
+        : `R ⇒ ${(16 / rateBits).toFixed(2)}×`
       : ''
 
   return (
@@ -238,11 +238,11 @@ export default function CompressionChart(props: {
               </g>
             )
           })}
-          {refValue !== null && (
+          {rateValue !== null && (
             <g>
               <line
-                x1={refX}
-                x2={refX}
+                x1={rateX}
+                x2={rateX}
                 y1={AXIS_H - 2}
                 y2={height - 4}
                 stroke="var(--ink-2)"
@@ -250,13 +250,13 @@ export default function CompressionChart(props: {
                 strokeDasharray="5 4"
               />
               <text
-                x={refX + (refX > width - 150 ? -6 : 6)}
+                x={rateX + (rateX > width - 150 ? -6 : 6)}
                 y={AXIS_H + 10}
-                textAnchor={refX > width - 150 ? 'end' : 'start'}
+                textAnchor={rateX > width - 150 ? 'end' : 'start'}
                 className="bar-value"
                 fill="var(--ink)"
               >
-                {refLabel}
+                {rateLabel}
               </text>
             </g>
           )}
@@ -296,12 +296,12 @@ export default function CompressionChart(props: {
                 <td>{r.ratio.toFixed(3)}</td>
               </tr>
             ))}
-            {refBits !== null && refBits > 0 && (
+            {rateBits !== null && rateBits > 0 && (
               <tr>
-                <td>reference rate R (Monte-Carlo)</td>
+                <td>entropy rate R (Monte-Carlo)</td>
                 <td>—</td>
-                <td>{refBits.toFixed(3)}</td>
-                <td>{(16 / refBits).toFixed(3)}</td>
+                <td>{rateBits.toFixed(3)}</td>
+                <td>{(16 / rateBits).toFixed(3)}</td>
               </tr>
             )}
           </tbody>

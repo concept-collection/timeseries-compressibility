@@ -6,13 +6,13 @@ import type { EntropyRequest, EntropyUpdate } from '../worker/entropyWorker'
  * so a stop/start pair reproduces an uninterrupted run exactly. */
 const BASE_SEED = 20260731
 
-export interface ReferenceRate {
+export interface EntropyRate {
   /** One unbiased estimate per independent past, in completion order. */
   perPast: number[]
   mean: number | null
   se: number | null
   running: boolean
-  /** "past 3 · rep 5/8" while computing. */
+  /** "rep 5/8" within the current past while computing. */
   progress: string | null
   /** Conditioning window M. */
   past: number
@@ -21,11 +21,11 @@ export interface ReferenceRate {
 }
 
 /**
- * The in-browser reference-rate estimate: a worker refines it (one
+ * The in-browser entropy-rate estimate: a worker refines it (one
  * independent past at a time) until stopped, and any change to the model
  * invalidates both the values and a run in flight.
  */
-export function useReferenceRate(kernel: Float64Array, sigma: number): ReferenceRate {
+export function useEntropyRate(kernel: Float64Array, sigma: number): EntropyRate {
   const [perPast, setPerPast] = useState<number[]>([])
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState<string | null>(null)
@@ -55,7 +55,7 @@ export function useReferenceRate(kernel: Float64Array, sigma: number): Reference
         perPastRef.current = [...perPastRef.current, u.value]
         setPerPast(perPastRef.current)
       } else {
-        setProgress(`past ${u.pastIndex + 1} · rep ${u.repsDone}/${u.reps}`)
+        setProgress(`rep ${u.repsDone}/${u.reps}`)
       }
     }
     workerRef.current = worker

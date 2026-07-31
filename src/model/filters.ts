@@ -40,10 +40,11 @@ export const DEFAULT_SPEC: FilterSpec = {
 
 /**
  * Every control snaps to a ladder of round values — a slider that stops on
- * 6 kHz and 101 taps rather than 5847 Hz and 97. σ is the 1-2-5 decade
- * ladder; frequency adds 3, 4, 6, 8 so the usual band edges are reachable.
+ * 6 kHz and 101 taps rather than 5847 Hz and 97. σ is dense through the
+ * single digits where the interesting transitions live, then roughly ×1.5
+ * steps; frequency adds 3, 4, 6, 8 so the usual band edges are reachable.
  */
-export const SIGMA_STOPS = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100]
+export const SIGMA_STOPS = [0.5, 1, 2, 3, 4, 5, 8, 12, 20, 30, 50, 100]
 export const TAP_STOPS = [9, 15, 21, 31, 45, 65, 101, 151, 201, 301]
 export const WIDTH_STOPS = [2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 32, 48, 64]
 

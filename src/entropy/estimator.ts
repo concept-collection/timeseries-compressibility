@@ -66,3 +66,33 @@ export function unbiasedEntropy(draw: Draw, n0: number, r: number, rng: Rng): nu
   for (let m = 1; m <= N; m++) est += deltas[m - 1] * 2 ** (r * m)
   return est
 }
+
+/**
+ * Integrated autocorrelation time of a stationary sequence, in samples.
+ * tau = 1 + 2 Σ_k ρ_k with Sokal's automatic windowing: the sum stops at
+ * the smallest lag W ≥ c·tau(W). Resolving tau needs x.length ≫ c·tau;
+ * longer times saturate near x.length / (2c), so cap the result when the
+ * chain may mix slower than the probe can see. Returns ≥ 1.
+ */
+export function integratedAutocorrTime(x: Int32Array | Float64Array, c = 5): number {
+  const n = x.length
+  if (n < 2) return 1
+  let mean = 0
+  for (let i = 0; i < n; i++) mean += x[i]
+  mean /= n
+  const d = new Float64Array(n)
+  for (let i = 0; i < n; i++) d[i] = x[i] - mean
+  let denom = 0
+  for (let i = 0; i < n; i++) denom += d[i] * d[i]
+  if (denom === 0) return 1
+  let tau = 1
+  let csum = 0
+  for (let w = 1; w <= n >> 1; w++) {
+    let acov = 0
+    for (let i = 0; i + w < n; i++) acov += d[i] * d[i + w]
+    csum += acov / denom
+    tau = 1 + 2 * csum
+    if (w >= c * tau) break
+  }
+  return Math.max(tau, 1)
+}

@@ -27,9 +27,11 @@ const post = self.postMessage as (message: EntropyUpdate) => void
 self.onmessage = (e: MessageEvent<EntropyRequest>) => {
   const { kernel, sigma, past, seed, startPast } = e.data
   for (let i = startPast; ; i++) {
+    // The rep count is only known once the past's mixing probe resolves the
+    // thinning; until the first onRep, report the thin=1 budget.
     post({ type: 'progress', pastIndex: i, repsDone: 0, reps: REPS_PER_PAST })
-    const value = estimateOnePast(kernel, sigma, past, pastSeed(seed, i), repsDone =>
-      post({ type: 'progress', pastIndex: i, repsDone, reps: REPS_PER_PAST }),
+    const value = estimateOnePast(kernel, sigma, past, pastSeed(seed, i), (repsDone, reps) =>
+      post({ type: 'progress', pastIndex: i, repsDone, reps }),
     )
     post({ type: 'past', pastIndex: i, value })
   }

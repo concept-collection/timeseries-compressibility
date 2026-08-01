@@ -38,7 +38,10 @@ export function truncatedStdNormal(lo: number, hi: number, rng: Rng): number {
 export class ConditionalChain {
   private readonly h: Float64Array
   private readonly sigma: number
-  private readonly thin: number
+  /** Sweeps per emitted sample. May be reassigned between draws (e.g. probe
+   * at thin = 1, then thin by the measured autocorrelation time);
+   * stationarity is unaffected. */
+  thin: number
   private readonly rng: Rng
   private readonly L: number
   private readonly M: number

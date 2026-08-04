@@ -1,0 +1,120 @@
+{
+  "_comment": [
+    "Cross-implementation golden numbers. Copy this file verbatim into every",
+    "repo that implements the theory and assert agreement in that repo's test",
+    "suite. If a port drifts, this catches it before the numbers reach a paper.",
+    "",
+    "Convention, stated once so it cannot be confused again:",
+    "  sigma_x   std of the white input x (the model parameter)",
+    "  kernel    NOT normalized (windowed-sinc designs have unit passband gain)",
+    "  sigma_y   = ||h||_2 * sigma_x, the std of the signal at the quantizer",
+    "  s_star^2  = exp(int ln(S + 1/12) df) - 1/12, S(f) = sigma_x^2 |H(f)|^2",
+    "  R         = G(s_star), G(s) = h(N(0,s^2) + U(-1/2,1/2)) in bits",
+    "Quantization step is 1 throughout. Sample rate 30000 Hz where relevant.",
+    "",
+    "The entropy rate depends on everything only through s_star, so compare",
+    "across implementations at matched s_star, never at matched sigma."
+  ],
+  "tolerance": 1e-06,
+  "cases": [
+    {
+      "name": "white",
+      "filter": {
+        "family": "none"
+      },
+      "sigma_x": 5.0,
+      "expected": {
+        "kernel_norm": 1.0,
+        "sigma_y": 5.0,
+        "s_star": 5.0,
+        "entropy_rate": 4.371424173194636,
+        "lpc_limit": 4.373816692285584,
+        "phase_loss": 0.0023925190909483973
+      }
+    },
+    {
+      "name": "moving-average-8",
+      "filter": {
+        "family": "movingAverage",
+        "width": 8
+      },
+      "sigma_x": 4.0,
+      "expected": {
+        "kernel_norm": 0.3535533905932738,
+        "sigma_y": 1.4142135623730951,
+        "s_star": 0.6486418361369437,
+        "entropy_rate": 1.5529090070448803,
+        "lpc_limit": 1.6632170596223987,
+        "phase_loss": 0.11030805257751841
+      }
+    },
+    {
+      "name": "first-difference",
+      "filter": {
+        "family": "firstDifference"
+      },
+      "sigma_x": 2.0,
+      "expected": {
+        "kernel_norm": 1.4142135623730951,
+        "sigma_y": 2.8284271247461903,
+        "s_star": 2.130066939377041,
+        "entropy_rate": 3.1511229582337514,
+        "lpc_limit": 3.1640168634505645,
+        "phase_loss": 0.012893905216813106
+      }
+    },
+    {
+      "name": "lowpass-3k",
+      "filter": {
+        "family": "lowpass",
+        "highHz": 3000,
+        "taps": 101
+      },
+      "sigma_x": 8.0,
+      "expected": {
+        "kernel_norm": 0.4390744178171754,
+        "sigma_y": 3.512595342537403,
+        "s_star": 0.5040429324652645,
+        "entropy_rate": 1.2631675560846523,
+        "lpc_limit": 1.4216612551912078,
+        "phase_loss": 0.15849369910655553
+      }
+    },
+    {
+      "name": "bandpass-300-6000",
+      "filter": {
+        "family": "bandpass",
+        "lowHz": 300,
+        "highHz": 6000,
+        "taps": 101
+      },
+      "sigma_x": 5.0,
+      "expected": {
+        "kernel_norm": 0.6021585207385785,
+        "sigma_y": 3.0107926036928925,
+        "s_star": 0.833669837993305,
+        "entropy_rate": 1.8663247991926637,
+        "lpc_limit": 1.9396853252174489,
+        "phase_loss": 0.07336052602478516
+      }
+    },
+    {
+      "name": "bandpass-300-6000-loud",
+      "filter": {
+        "family": "bandpass",
+        "lowHz": 300,
+        "highHz": 6000,
+        "taps": 101
+      },
+      "sigma_x": 20.0,
+      "expected": {
+        "kernel_norm": 0.6021585207385785,
+        "sigma_y": 12.04317041477157,
+        "s_star": 1.5505778328602622,
+        "entropy_rate": 2.7044800263187847,
+        "lpc_limit": 2.7282484703008425,
+        "phase_loss": 0.023768443982057796
+      }
+    }
+  ]
+}
